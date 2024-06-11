@@ -1,0 +1,1069 @@
+---
+title: ""
+Author: "Michael H. Schwartz^1^, ^2^, Andrew G. Georgiadis^1^, ^2^, and Andrew J. Ries"
+Date: ""
+
+format: html
+fig-dpi: 600
+embed-resources: true
+    
+execute:
+    echo: false
+    warning: false
+    message: false
+    error: false
+    
+params:
+  target: "Pel.Ang.Sag|Hip.Ang.Sag|Kne.Ang.Sag|Ank.Ang.Sag"
+  inter1: "Neural_Rhizotomy"
+  inter2: 
+  caliper1: "age"
+  thresh1: 2
+  caliper2: "meansta_Pel_Ang_Sag"
+  thresh2: 5
+  MRN: 476495
+  Event_Date: "2015-09-17"
+  sd: "R"
+---
+
+```{r}
+#| echo: false
+#| message: false
+
+# BART stuff -----
+# options(java.parameters = "-Xmx32g")
+# library(bartMachine)
+# library(bartMan)
+
+
+# Load libraries -----
+library(tidyverse)
+library(lubridate)
+library(patchwork)
+library(ggtext)
+library(RColorBrewer)
+library(glue)
+library(gt)
+library(gtsummary)
+library(ggpmisc)
+library(MatchIt)
+library(ggh4x)
+
+
+# User Functions -----
+margin <- ggplot2::margin
+source("SCRIPTS/read_and_organize.R")
+source("SCRIPTS/get_meas.R")
+source("SCRIPTS/get_recon.R")
+source("SCRIPTS/get_TD.R")
+source("SCRIPTS/tbl_pt_vs_match.R")
+source("SCRIPTS/tbl_pp.R")
+source("SCRIPTS/organize_match.R")
+source("SCRIPTS/pmatch_all_plot.R")
+source("SCRIPTS/pmatch_target_plot.R")
+source("SCRIPTS/chkmatchlims.R")
+
+# Make ggplot2 theme -----
+theme_mhs <- theme_minimal() 
+theme_mhs <- theme_mhs %+replace%
+  theme(
+    plot.title = element_text(size = 9, hjust = 0, margin=margin(b=2)),
+    plot.subtitle = element_text(size = 5, hjust = 0, margin=margin(b=1, t=1)),
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 7),
+    axis.text = element_text(size = 6),
+    axis.title = element_text(size = 8),
+    strip.text = element_text(size = 4, margin=margin(b=2)),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(linewidth = .2, color = "grey85")
+  )
+
+theme_set(theme_mhs)
+
+# My r, g, b
+myred <- "#E41A1c"
+myblue <- "#377EB8"
+mygreen <- "#4DAF4A"
+
+
+# For trimming white space around figures -----
+knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
+
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, 
+                      message = FALSE, cache.lazy = FALSE)
+```
+
+```{r}
+#| label: "read-td"
+#| cache: true
+#| include: false
+
+# Read and organize TD gait data -----
+tdavg <- get_TD()
+
+```
+
+```{r}
+#| label: "load-historical-data"
+#| cache: true
+
+# Read in historical gait data from Read C3D Output -----
+dataroot <- "C:/Users/mschwartz/OneDrive - Gillette Children's Specialty Healthcare/Read C3D/OUTPUT"
+load(glue({dataroot},"/data_avg_current.RData"))
+
+```
+
+# Estimating Outcomes From Direct Patient Matching
+
+## Introduction
+
+The goal of this project is to develop a tool to flexibly estimate treatment outcomes by matching a current patient to a set of historical patients.
+
+Imagine that, for a given patient, you are considering a specific treatment, or a pair of complementary treatments like FDO & TDO. The algorithm being proposed here finds patients from the historical record who look like your patient ("*matches*") and underwent the treatment(s) you are considering, then displays the outcomes for the matches. A separate compact report will be generated for each treatment (or pair of treatments) under consideration.
+
+There will be a fully manual option where the you choose the treatments, matching criteria, and outcomes you want. There will also be varying levels of automation available to streamline the process using templates designed by clinical and technical experts. Levels of automation include:
+
+-   **Selecting treatments from a reduced list**. The list is generated from historic practice on similar patients. You can add or subtract treatments from this list.
+-   **Using pre-determined matching criteria for a given treatment**. For example, for an FDO the templated matching criteria might match transverse plane kinematics, anteversion, and age. You can customize this by (for example) adding required matching tibial torsion or pelvic obliquity and removing or relaxing matching on age.
+-   **Reporting pre-determined outcomes**. For example, the pre-determined outcomes for an FDO might be change in anteversion, hip rotation, and foot progression. You could add pelvic tilt and the GOAL body image and self-esteem score, and remove anteversion.
+
+To demonstrate the method we will use a patient from the historical record who underwent treatment and has a follow-up gait evaluation. This allows us to compare the predictions with the observed outcome. This is just a single example. Overall statistics on algorithm performance will be available soon. Note that, in practice, we will be matching "*the patient in front of us*", and thus will not have follow-up data.
+
+***What follows is designed to explain the approach and show the types of output that can be generated. It is not meant to reflect what a final "clinical" report would look like.***
+
+## Workflow
+
+```{r}
+#| label: "organize-historical-data"
+
+# Set target curve -------------------------------------------------------------
+target <- params$target
+target_ <- str_replace_all(target, "\\.", "_")
+
+# Choose variable class (Ang, Mom, Pwr, Rxn) -----
+vclass <- str_extract(target, "\\.([^\\.]+)\\.")
+vclass <- str_remove_all(vclass, "\\.")
+vclass <- glue("{vclass}_avg")
+
+# Arrange -----
+dd <- 
+  list_rbind(get(vclass)) %>% 
+  filter(Year > 2005)
+
+ddw <- 
+  dd %>% 
+  select(side, t, name, Exam_ID, value) %>%
+  pivot_wider(names_from = c(side, Exam_ID), values_from = value) %>% 
+  arrange(name, t)
+
+
+# Remove columns with missing data -----
+ddw <- ddw %>% select(-which(colSums(is.na(ddw)) > 0))
+
+
+# Get limits for plotting -----
+# TODO: Get curve-by-curve limits
+ylim <- 
+  dd %>% 
+  filter(str_detect(name, target)) %>% 
+  reframe(
+    ylim = quantile(value, probs = c(.025, .975), na.rm = T)
+  ) %>% 
+  mutate(ylim = sign(ylim) * 5 * round(abs(ylim)) %/%5 + 5*sign(ylim)) %>% 
+  .$ylim %>% 
+  as.numeric()
+```
+
+The workflow for the final product is still in flux. Generally, I anticipate something like the steps listed below:
+
+-   **Step 1: Choose the patient and side**
+    -   Note: it is currently a unilateral algorithm. This is a practical, but not a technical, restriction. Matching both sides of a patient is possible, but substantially restricts the ability to find historical matched patients
+-   **Step 2: Decide what curves to match**
+    -   You can choose to match any single curve or combination of curves. Matching is generally done on kinematics, but the method extends seamlessly to kinetics, muscle lengths, or any other continous outcome measured over the gait cycle
+-   **Step 3: Choose up to two planned interval surgeries to match**
+    -   Some surgeries may make sense in pairs (e.g., DFEO + PTA)
+-   **Step 4: Choose up to two "*caliper*" variables and a proximity limit**
+    -   For example, you can insist that age must be within 3 years, popliteal angle must be within 10$^\circ$
+
+There is a trade-off between the strictness of the match (e.g., pattern + surgeries + calipers) and the number and similarity of matches that can be found. The model will attempt to find 30 historical limbs that meet the imposed criteria, but may not be able to find this many depending on how restrictive the criteria are and how atypical your patient is.
+
+### Clinical Example
+
+-   Patient MRN `r params$MRN`, visit date `r params$Event_Date`
+-   Match on `r str_replace_all(target, "\\|", ", ")`
+-   Insist that matches underwent `r str_replace_all(params$inter1, "_", " ")`
+-   Matching `r params$caliper1` within `r params$thresh1`, `r params$caliper2` within `r params$thresh2`
+
+```{r}
+## Compute feature decomposition
+# Get matrix of values ---------------------------------------------------------
+x <- 
+  ddw %>% 
+  filter(str_detect(name, target)) %>%
+  select(starts_with(c("L", "R"))) %>% 
+  as.matrix()
+
+
+# Get names of feature values --------------------------------------------------
+fnames <- 
+  ddw %>% 
+  filter(str_detect(name, target)) %>%
+  select(name) 
+
+
+# Get features -------------------------------------------------------------
+res <- svd(x)
+features <- res$u[, 1:length(res$d)]
+
+
+# Make fidelity plot -----
+crit = .90
+ncrit <- first(which(round(cumsum(res$d)/sum(res$d), 2) == crit))
+
+
+# Organize features ------------------------------------------------------------
+f <- as_tibble(features) %>% 
+  mutate(
+    var = fnames$name,
+    t = rep(seq(0, 100, 2), nrow(features)/51)
+  ) %>% 
+  relocate(t, var) %>% 
+  pivot_longer(-c(t, var)) %>% 
+  rename(feature = name) %>% 
+  mutate(
+    feature = fct_inorder(feature)
+  )
+
+scores <- as_tibble(t(res$u)[1:ncrit,] %*% x)
+
+
+# Organize scores --------------------------------------------------------------
+# "Pre" scores - just the scores tied to Exam_ID -----
+s <- 
+  scores %>% 
+  mutate(sname = glue("Feat_target_{row_number()}")) %>% 
+  relocate(sname) %>% 
+  pivot_longer(-sname, names_to = c("side", "Exam_ID"), names_sep = "_") %>% 
+  pivot_wider(names_from = sname, values_from = value)
+
+
+# Rename Exam_ID --> Exam_IDPost to synch with post status -----
+sPost <- 
+  s %>% 
+  rename_with( ~ glue("{.}Post"), starts_with("Feat_target")) %>% 
+  rename(Exam_IDPost = Exam_ID)
+
+```
+
+```{r}
+#| label: "read-organize-data"
+#| include: false
+
+# Get clinical data from RRFMP output -----
+dat <-read_and_organize("DATA/FDpp_2023-09-23.RDS", params$target)
+
+```
+
+```{r}
+#| label: "add-scores"
+
+# Add scores to data -----
+dat <- 
+  dat %>% 
+  left_join(s, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID")) %>% 
+  left_join(sPost, by = c("SIDE" = "side", "Exam_IDPost" = "Exam_IDPost")) %>% 
+  drop_na(starts_with("Feat_target"))
+
+```
+
+```{r}
+#| label: "identify-patient"
+
+if(is.null(params$MRN)){
+  # iscore <- which(predict(mod1, dat[names(mod1$X)]) < 0)
+  # ix <- sample(iscore, 1)
+
+  icrouch <- which(dat$meansta_Kne_Ang_Sag > 35)
+  ix <- sample(icrouch, 1)
+  
+  # icalc <- which(dat$maxsta_Ank_Ang_Sag > 5)
+  # ix <- sample(icalc, 1)
+  
+  # istiff <- which(dat$maxswi_Kne_Ang_Sag < 45 & between(dat$minsta_Kne_Ang_Sag, 10, 30))
+  # ix <- sample(istiff, 1)
+  
+  # ihams <- which(dat$ic_Kne_Ang_Sag > 25 & dat$POP_ANG_UNI > 70 & dat$KNEE_EXT < 5)
+  # ix <- sample(ihams, 1)
+  
+  # ihip <- which(dat$meansta_Hip_Ang_TrnPost > 20 &
+  #                 dat$interval_Femoral_Derotation_Osteotomy > 0)
+  # ix <- sample(ihip, 1) 
+  
+  # ikneeint <- which(dat$BIMAL < 5 & dat$meansta_Kne_Ang_Trn > -5 &
+  # dat$interval_Tibial_Derotation_Osteotomy > 0)
+  # ikneeext <- which(dat$BIMAL > 30 & dat$meansta_Kne_Ang_Trn < -25)
+  # ix <- sample(ikneeint, 1)
+  
+  # iank <- which(dat$ic_Ank_Ang_Sag < -10 & dat$ANK_DORS_90 < 5)
+  # ix <- sample(iank, 1)
+  
+  # ix <- sample(1:nrow(dat), 1)
+  
+  ex <- dat$Exam_ID[[ix]]
+  sd <- dat$SIDE[[ix]]
+  exPost <- dat$Exam_IDPost[[ix]]
+  
+  # Good TDO example
+  # ex <- 16062
+  # exPost <- 16763
+  # sd <- "L"
+  
+  # Good crouch example
+  # ex <- 11328
+  # exPost <- 12191
+  # sd <- "R"
+} else {
+  temp <- 
+    dat %>% 
+    filter(MRN == params$MRN, 
+           year(Event_Date) == year(as.Date(params$Event_Date)),
+           month(Event_Date) == month(as.Date(params$Event_Date)),
+           day(Event_Date) == day(as.Date(params$Event_Date)),
+           SIDE == params$sd)
+  ex <- temp$Exam_ID
+  exPost <- temp$Exam_IDPost
+  sd <- params$sd
+}
+
+```
+
+```{r}
+#| label: "get-patient-data"
+
+# Get patient data --------------------------------------------------------------
+xpt <- 
+  dat %>% 
+  filter(Exam_ID == ex, SIDE == sd) %>% 
+  mutate(target = 1)
+
+# Choose number of features to use -----
+nfuse = ncrit
+
+# Get measured curves -----
+measuredPre <- 
+  get_meas(dd, ex, sd, target) %>% 
+  mutate(
+    name = fct_drop(name)
+  ) %>% 
+  mutate(
+    type = "Measured",
+    lwr = NA,
+    upr = NA,
+    status = "Pre"
+  )
+
+measuredPost <- 
+  get_meas(dd, exPost, sd, target) %>% 
+  mutate(
+    name = fct_drop(name)
+  ) %>% 
+  mutate(
+    type = "Measured",
+    lwr = NA,
+    upr = NA,
+    status = "Post"
+  )
+
+# Harmonize TD var factor levels -----
+TD <- 
+  tdavg %>% 
+  filter(name %in% measuredPre$name) %>% 
+  mutate(
+    name = factor(name, levels = levels(measuredPre$name)),
+    value = as.numeric(NA),
+    status = "TD"
+  )
+
+
+# Organize results -----
+temp <- 
+  bind_rows(TD, measuredPre, measuredPost) %>% 
+  mutate(type = fct_inorder(type))
+
+```
+
+```{r}
+# Choose matching variables ----------------------------------------------------
+v <- names(dat)
+
+# Intervals -----
+intercrit <- if(is.null(params$inter1)) "zzz"
+
+if(!is.null(params$inter1)){
+  intercrit <- ifelse(
+    !is.null(params$inter2), 
+    glue_collapse(c(params$inter1, params$inter2), sep = "|"),
+    params$inter1
+  )
+}
+
+intervars <- str_subset(v, intercrit)
+intervars <- str_subset(intervars, "Post|prior|Neurolysis|Change|Short|Percent|Angle", negate = T)
+
+
+# Choose distance variables ----------------------------------------------------
+# Features -----
+featvars <- str_subset(v, "(?!.*Post)Feat_target")
+distvars <- c(featvars)
+
+
+# Remove patient from matching data, fill missing ------------------------------
+# Note: Only for the matching. Reporting is based on actual data including NA
+datfill <- dat %>% 
+  filter(Exam_ID != xpt$Exam_ID) %>% 
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = T), .)))
+
+
+# Build matching formula -------------------------------------------------------
+rhs <- glue_collapse(c(distvars), sep = " + ")
+formdist <- as.formula(glue("target ~ {rhs}"))
+
+if(length(intervars) > 0){
+  rhsinter <- glue_collapse(c(intervars), sep = " + ")
+  forminter <- as.formula(glue(" ~ {rhsinter}"))
+} else{
+  forminter <- NULL 
+}
+
+
+# Add target data to end of datfill --------------------------------------------
+datfill <- bind_rows(datfill, xpt)
+datfill$target <- 0
+datfill$target[nrow(datfill)] <- 1
+
+
+# Build caliper ----------------------------------------------------------------
+if(!is.null(params$caliper2)){
+  caliper <- 
+    c(params$thresh1 / sd(datfill[[params$caliper1]]), 
+      params$thresh2 / sd(datfill[[params$caliper2]]))
+  names(caliper) <- c(params$caliper1, params$caliper2)
+} else{
+  caliper <- 
+    c(params$thresh1 / sd(datfill[[params$caliper1]]))
+  names(caliper) <- c(params$caliper1)
+}
+
+
+# Get the match ----------------------------------------------------------------
+set.seed(42)
+nmatch = 30
+
+m.out <-
+  matchit(
+    formula = formdist,
+    data = datfill,
+    exact = forminter,
+    distance = "euclidean",
+    method = "nearest",
+    ratio = nmatch,
+    replace = FALSE,
+    caliper = caliper
+  )
+
+dat_match <- 
+  dat %>% 
+  filter(Exam_ID != xpt$Exam_ID) %>% 
+  slice(as.numeric(m.out$match.matrix)) %>% 
+  mutate(target = 0)
+
+```
+
+```{r}
+#| label: "match-distance"
+
+# Compute distance distribution match vs. patient -----
+fmatch <- 
+  dat_match %>% 
+  select(starts_with("Feat_target") & !ends_with("Post")) 
+
+ref <- 
+  xpt %>% 
+  select(starts_with("Feat_target") & !ends_with("Post")) %>% 
+  pivot_longer(everything()) %>% 
+  select(value)
+
+xx <- fmatch %>% as.matrix()
+yy <- ref %>% as.matrix()
+
+dist <- (xx %*% yy) ^ 0.5
+
+dat_match <- 
+  dat_match %>% 
+  mutate(distance = dist) %>% 
+  arrange(dist)
+
+
+```
+
+## Check Baseline Matching
+
+The algorithm will not always be able to find good matches. This might because the patient is atypical or the matching criteria are extremely strict. As a result, it is important to assess the quality of the matching before examining the predicted outcomes. The better the matching quality, the more confidence you can have in the predicted outcomes. As our database grows (and merges with other databases) the ability to find more and closer matches will improve. 
+
+```{r}
+#| label: "organize-matching-kinematics"
+
+# Get matching IDs -----
+matchlist_pre <- 
+  dat_match %>% 
+  select(Exam_ID, SIDE) %>% 
+  mutate(
+    Exam_ID = as.integer(Exam_ID)
+  )
+
+matchlist_post <- 
+  dat_match %>% 
+  select(Exam_IDPost, SIDE) %>% 
+  mutate(
+    Exam_ID = as.integer(Exam_IDPost)
+  )
+
+
+# Get matching kinematics -----
+dd_match_pre <- 
+  dd %>% 
+  inner_join(matchlist_pre) %>% 
+  mutate(
+    type = "Matched",
+    status = "Pre"
+  ) %>% 
+  select(Exam_ID, side, t, name, type, value, status)
+
+dd_match_post <- 
+  dd %>% 
+  inner_join(matchlist_post) %>% 
+  mutate(
+    type = "Matched",
+    status = "Post"
+  ) %>% 
+  select(Exam_ID, side, t, name, type, value, status)
+
+```
+
+### Overall Kinematics
+
+The algorithm matches on a chosen *subset* of gait curves. The most sensible idea is to match on kinematics, and that is what we will focus on. However, there are no *technical* reasons that kinetics, muscle lengths, or ground reaction forces could not be matched. The specific sub-set of curves used for matching depends on the surgery of interest, and is either drawn from template or user-selected. For example, for an SDR the sagittal plane might be chosen, while for an FDO the transverse plane might be chosen.
+
+The algorithm does not attempt to match curves that are not selected. So, for the patient described above, the algorithm does not attempt to match the coronal or transverse planes. As a result, these curves may or may not match the patient, depending on myriad clinical and biomechanical factors.
+
+We start by examining the overall kinematic matching at baseline (@fig-match-allPre). We examine all curves, including those not targeted by the matching. However, to focus attention on the actual matching criteria, the panels containing the curves targeted for matching are outlined. 
+
+Some plotting conventions:
+
+*   Baseline data (kinematics, physical examination measures, etc...) are red and follow-up are in blue 
+*   Measured data are a solid curves, and the median matched data is a dashed curve  
+*   Individiual matches are thin solid lines 
+*   As noted previously (and subsequently), we will not have follow-up data for the target patient in clinical practice 
+
+#### All Kinematics - Baseline
+
+```{r}
+#| label: "fig-match-allPre"
+#| fig-cap: "Overall kinematic matching. Targeted curves are outlined. Measured curves are a solid lines and the median of the matches is a dashed line. Thin lines are individual matches. Shaded areas are 90% CI. Typically developing 90% CI is in green."
+#| fig-cap-location: bottom
+#| crop: true
+#| warning: false
+
+dPre <- organize_match(dd_match_pre, measuredPre, "Pre")
+p <- pmatch_all_plot(dPre)
+p
+
+```
+
+#### Targeted Kinematics - Baseline
+
+We can look more closely at the specific curves targeted for matching (@fig-match-target).
+
+```{r}
+#| label: "fig-match-target"
+#| fig-cap: "Targeted kinematic matching. Measured curves are a solid lines and the median of the matches is a dashed line. Thin lines are individual matches. Shaded areas are 90% CI. Typically developing 90% CI is in green."
+#| fig-cap-location: bottom
+#| crop: true
+#| warning: false
+
+p <- pmatch_target_plot(dPre, target)
+p
+
+```
+
+### General Characeristics
+
+We can examine general characteristics of the patient and matches (@tbl-general). What we choose to compare is flexible and can contain anything in the database. Here we have chosen the *classics* --- age, sex, and GMFCS level. Note that we do not necessarily enforce matching criteria on all these variables.
+
+```{r}
+#| label: "tbl-general"
+#| tbl-cap: "Limb Characteristics"
+#| tbl-cap-location: bottom
+
+reset_gtsummary_theme()
+
+v <- c("age", "Sex", "GMFCS")
+tbl_gen <- tbl_pt_vs_match(dat_match, v, "Pre")
+tbl_gen
+
+```
+
+### Quality of Matching
+
+We can summarize and simplify the examination of matching quality by testing whether the patient's measurements are similar to the matches (@tbl-general-chk). For continuous variables (e.g., age) we test whether the patient's data lies within the 90% CI of the matches. The choice of interval width --- 90% in this case --- is subjective. Since we do not account for the large measurement uncertainty in the patient data, it is reasonable to choose a relatively wide interval of the matching data. For categorical data (e.g., GMFCS) we test whether the most common level among the matches is the observed level for the patient. In other words, if the patient is GMFCS III, then we check to see if level III is the most common GMFCS level among the matches. 
+
+```{r}
+#| label: "tbl-general-chk"
+#| tbl-cap: "Simple Check of Limb Characteristics"
+#| tbl-cap-location: bottom
+#| tbl-subcap: 
+#|   - "Matching Check"
+#|   - "Matching Details"
+#| layout-ncol: 2
+
+reset_gtsummary_theme()
+
+tbl_gen_chk <- chkmatchlims(dat_match, v, xpt)
+tbl_gen_chk
+tbl_gen
+
+```
+
+### Prior Treatment
+
+We can further evaluate the quality of matching by examining the prior treatments of the patient and matches. We do not currently allow matching on prior treatment since it restricts the ability to find matches, and has not been shown to affect outcome. However, it would be technically simple to do so.
+
+```{r}
+#| label: "fig-prior"
+#| fig-cap: "Prior Treatment"
+#| out-width: "80%"
+
+temp <- 
+  dat_match %>% 
+  bind_rows(xpt) %>% 
+  group_by(target) %>% 
+  select(
+    matches("prior|target$") &
+      !matches("Post") &
+      !matches("Neurolysis|Hardware|Cast|BOTOX|Unknown|Other|Combo|Spine|TKA|Upper|Leg|Exploratory")
+  ) %>% 
+  summarize( 
+    across(
+      everything(),
+      ~ mean(.)
+    )
+  ) %>%  
+  pivot_longer(-target) %>% 
+  mutate(
+    name = str_replace_all(name, "prior_", ""),
+    name = str_replace_all(name, "_", " ")
+  )
+
+pprior <- 
+  ggplot(temp, aes(x=name, y=value, fill=factor(target))) + 
+  geom_col(position = position_dodge()) +
+  scale_fill_manual(values = c("grey30", myblue), labels = c("Matches", "Patient")) +
+  ylim(0,1) +
+  ylab("Frequency") +
+  xlab("") +
+  guides(fill = guide_legend(title = "")) +
+  theme(
+    axis.text.x = element_text(size=9, angle=90, hjust=1),
+    axis.text.y = element_text(size=9),
+    axis.title = element_text(size=10),
+    legend.text = element_text(size = 7)
+  ) 
+
+pprior
+
+```
+
+### Interval Treatment
+
+We also examine the interval treatments matches (@fig-interval). Since we only match on one or two interval treatments, it is important to examine concomitant treatments of the matched group and consider their clinical implications. Note that it is possible to specify no required interval treatments. In this case, the interval treatment plot gives an idea of the historical treatment practice for similar patients. However, due to the small numbers of matches, this is not a substitute for formal propensity score modeling. In this example, we have historic data for the patient, so their data appears on the graph. In practice, this graph will only show the interval treatment of the matches.
+
+```{r}
+#| label: "fig-interval"
+#| fig-cap: "Interval Surgery"
+#| out-width: "80%"
+
+temp <- 
+  dat_match %>% 
+  bind_rows(xpt) %>% 
+  group_by(target) %>% 
+  select(
+    matches("interval|target$") &
+      !matches("Post") &
+      !matches("Neurolysis|Hardware|Cast|BOTOX|Unknown|Other|Combo|Spine|TKA|Upper|Leg|Exploratory")
+  ) %>% 
+  summarize(
+    across(
+      everything(),
+      ~ mean(.)
+    )
+  ) %>% 
+  pivot_longer(-target) %>% 
+  mutate(
+    name = str_replace_all(name, "interval_", ""),
+    name = str_replace_all(name, "_", " ")
+  )
+
+pinter <- 
+  ggplot(temp, aes(x=name, y=value, fill=factor(target))) + 
+  geom_col(position = position_dodge()) +
+  scale_fill_manual(values = c("grey30", myblue), labels = c("Matches", "Patient")) +
+  ylim(0,1) +
+  ylab("Frequency") +
+  xlab("") +
+  guides(fill = guide_legend(title = "")) +
+  theme(
+    axis.text.x = element_text(size=9, angle=90, hjust=1),
+    axis.text.y = element_text(size=9),
+    axis.title = element_text(size=10),
+    legend.text = element_text(size = 7)
+  )
+
+pinter
+```
+
+### Clinical Profile
+
+We can choose examine the matching for any variables from the database (PE, history, function, ...). For demonstration purpose we are focusing on range-of-motion, torsional-alignment, spasticity, and critcal elements of function. Other tables would be identically formatted, but contain different data.
+
+#### Range-of-Motion (@tbl-rom)
+
+```{r}
+#| label: "tbl-rom"
+#| tbl-cap: "Range-of-Motion"
+#| cap-location: bottom
+#| tbl-subcap: 
+#|   - "Matching Check"
+#|   - "Matching Details"
+#| layout-ncol: 2
+
+reset_gtsummary_theme()
+# theme_gtsummary_compact()
+
+# Baseline
+v <- c("HIP_EXT", "POP_ANG_UNI", "KNEE_EXT", "EXTEN_LAG", "PATELLA_ALTA", "ANK_DORS_0", "ANK_DORS_90")
+tbl_romPre <- tbl_pt_vs_match(dat_match, v, "Pre")
+
+tbl_rom_chk <- chkmatchlims(dat_match, v, xpt)
+tbl_rom_chk
+tbl_romPre
+
+# Follow-up
+v <- glue("{v}Post")
+tbl_romPost <- tbl_pt_vs_match(dat_match, v, "Post")
+
+```
+
+#### Torsional Alignment (@tbl-tor)
+
+```{r}
+#| label: "tbl-tor"
+#| tbl-cap: "Torsional Alignment"
+#| cap-location: bottom
+#| tbl-subcap: 
+#|   - "Matching Check"
+#|   - "Matching Details"
+#| layout-ncol: 2
+
+reset_gtsummary_theme()
+# theme_gtsummary_compact()
+
+# Baseline
+v <- c("ANTEVERSION", "HIP_INT_ROT", "HIP_EXT_ROT", "BIMAL")
+tbl_torPre <- tbl_pt_vs_match(dat_match, v, "Pre")
+
+tbl_tor_chk <- chkmatchlims(dat_match, v, xpt)
+tbl_tor_chk
+tbl_torPre
+
+# Follow-up
+v <- glue("{v}Post")
+tbl_torPost <- tbl_pt_vs_match(dat_match, v, "Post")
+
+```
+
+#### Spasticity (@tbl-spa)
+
+Note that I have lumped Ashworth scores 1-2 into a "Moderate" group, and 3-4 into a "Severe" group. This is not necessary, but allows for more efficient matching on spasticity (this is called "coarsened exact matching").
+
+```{r}
+#| label: "tbl-spa"
+#| tbl-cap: "Spasticity"
+#| cap-location: bottom
+#| tbl-subcap: 
+#|   - "Matching Check"
+#|   - "Matching Details"
+#| layout-ncol: 2
+
+reset_gtsummary_theme()
+# theme_gtsummary_compact()
+
+# Baseline
+v <- c("ADDUCTOR_SPAS", "HAMSTRING_SPAS", "RECT_FEM_SPAS", "PLANTFLEX_SPAS")
+
+tbl_spaPre <- tbl_pt_vs_match(dat_match, v, "Pre")
+tbl_spa_chk <- chkmatchlims(dat_match, v, xpt)
+tbl_spa_chk
+tbl_spaPre
+
+# Follow-up
+v <- glue("{v}Post")
+tbl_spaPost <- tbl_pt_vs_match(dat_match, v, "Post")
+
+```
+
+#### Function and Mobility and Ice Skating (@tbl-fun)
+
+```{r}
+#| label: "tbl-fun"
+#| tbl-cap: "Function and Mobility and Ice Skating"
+#| cap-location: bottom
+#| tbl-subcap: 
+#|   - "Matching Check"
+#|   - "Matching Details"
+#| layout-ncol: 2
+
+reset_gtsummary_theme()
+# theme_gtsummary_compact()
+
+# Baseline
+v <- c("FAQT", "ICE_ROLL_SKATE")
+
+tbl_funPre <- tbl_pt_vs_match(dat_match, v, "Pre")
+
+tbl_fun_chk <- chkmatchlims(dat_match, v, xpt)
+tbl_fun_chk
+tbl_funPre
+
+# Follow-up
+v <- glue("{v}Post")
+tbl_funPost <- tbl_pt_vs_match(dat_match, v, "Post")
+
+```
+
+### Examine Predicted Follow-up Kinematics
+
+Once we are convinced that the matching is acceptable --- which is a judgment call on the part of the clinician --- we can examine the patient's baseline data (red) versus the observed follow-up patterns for the matched limbs (blue) (@fig-match-allPost). Note that in this example, because we have historical data, we also show the patient's measured follow-up kinematics. In clinical use there will **not** be a measured follow-up, so there will not be a solid blue (measured) curve. Comparing the observed patient outcome to the matched data gives a visual indication of the model's performance.
+
+```{r}
+#| label: "fig-match-allPost"
+#| fig-cap: "Overall kinematic matching. Targeted curves are outlined. Measured curves are solid lines and median of the matches is a dashed lines. Shaded areas are 90% CI. Typically developing 90% CI is in green. Note that for this example we have measured follow-up data for the patient. This will not be the case in practice."
+#| fig-cap-location: bottom
+#| crop: true
+#| warning: false
+
+# Build plotting data -----
+dPost <- organize_match(dd_match_post, measuredPost, "Post")
+
+# Make plot-----
+pmatchallPost <- pmatch_all_plot(dPost)
+
+# Add measured and matched median pre -----
+p <- 
+  pmatchallPost +
+  geom_line(
+    data = dPre$davg %>% filter(type == "Measured"),
+    aes(x = t, y = value, color = status),
+    linewidth = .6,
+    color = myred
+  ) +
+  geom_line(
+    data = dPre$davg %>% filter(type == "Matched"),
+    aes(x = t, y = value, color = status),
+    linewidth = .6,
+    color = myred,
+    linetype = "dashed"
+  ) 
+p
+
+```
+
+We can take a closer look at follow-up predictions for the targeted matching curves (@fig-match-targetPost). 
+
+```{r}
+#| label: "fig-match-targetPost"
+#| fig-cap: "Targeted kinematic matching. Measured curves are solid lines and matches are a dashed lines. Thin lines are individual matches and thick line is the median. Shaded areas are 90% CI. Typically developing 90% CI is in green. Note that for this example we have measured follow-up data for the patient. This will not be the case in practice."
+#| fig-cap-location: bottom
+#| crop: true
+#| warning: false
+
+# Make plot-----
+pmatchtargetPost <- pmatch_target_plot(dPost, target)
+
+# Add measured pre
+pmatchtargetPost <- 
+  pmatchtargetPost +
+  geom_line(
+    data = dPre$davg %>% filter(type == "Measured", str_detect(name, target)),
+    aes(x = t, y = value),
+    linewidth = .8,
+    color = myred
+  )
+
+pmatchtargetPost
+
+```
+
+#### Difference in Differences Analysis
+
+Examining the follow-up level of a patient parameter is useful. However, the main idea of this method is to exploit the power of a "*Difference in Differences*" (DID) design (https://en.wikipedia.org/wiki/Difference_in_differences). In a DID design we make a "*parallel trends*" assumption. That is, we assume (with rigorous mathematical support) that the patient and matches will undergo similar *changes* with treatment --- even if there are slight differences at baseline.
+
+**placeholder DID and parallel trends plot**
+
+For DID analysis the primary outcomes are differences in various parameters between baseline and follow-up (e.g., change in knee flexion curve, change in popliteal angle, ...) . This is largely consistent with the common and natural clinical practice of thinking about change with treatment. For example, there may be a clinical goal to externalize Little Billie's foot progression by 20$^\circ$ following an FDO.
+
+### Examine Follow-Up Clinical Profile
+
+Gait is not the only outcome we can examine. Because we have a set of matched observations (patient limbs), we can query any measure from our database, or derived from the gait data.
+
+#### Range-of-Motion (Baseline vs. Follow-up)
+
+In practice, we will not have follow-up data for the patient and will only show the baseline matching and a table of matches pre-post-change.
+
+```{r}
+#| label: "tbl-rompp"
+#| tbl-cap: "Range-of-Motion Baseline vs. Follow-Up (Matches)"
+#| cap-location: bottom
+
+reset_gtsummary_theme()
+
+v <- c("HIP_EXT", "POP_ANG_UNI", "KNEE_EXT", "PATELLA_ALTA", "ANK_DORS_90", "ANK_DORS_0")
+tbl_rompp <- tbl_pp(dat_match, v)
+tbl_rompp
+
+```
+
+#### Torsion (Baseline vs. Follow-up)
+
+```{r}
+#| label: "tbl-torpp"
+#| tbl-cap: "Torsional Alignment Baseline vs. Follow-Up (Matches)"
+#| cap-location: bottom
+
+reset_gtsummary_theme()
+
+v <- c("ANTEVERSION", "EOS_FemTor", "HIP_INT_ROT", "HIP_EXT_ROT", "BIMAL", "EOS_Bimal")
+tbl_torpp <- tbl_pp(dat_match, v)
+tbl_torpp
+
+```
+
+#### Spasticity (Baseline vs. Follow-up)
+
+```{r}
+#| label: "tbl-spapp"
+#| tbl-cap: "Torsional Alignment Baseline vs. Follow-Up (Matches)"
+#| cap-location: bottom
+
+reset_gtsummary_theme()
+
+v <- c("ADDUCTOR_SPAS", "HAMSTRING_SPAS", "RECT_FEM_SPAS", "PLANTFLEX_SPAS")
+tbl_spapp <- tbl_pp(dat_match, v)
+tbl_spapp
+
+```
+
+#### Function
+
+```{r}
+#| label: "tbl-funpp"
+#| tbl-cap: "Torsional Alignment Baseline vs. Follow-Up (Matches)"
+#| cap-location: bottom
+
+reset_gtsummary_theme()
+
+v <- c("FAQT", "ICE_ROLL_SKATE")
+tbl_funpp <- tbl_pp(dat_match, v)
+tbl_funpp
+
+```
+
+### Follow-up Profile Comparison to Patient
+
+For this example patient we can examine follow-up clinical profile data and compare it to the predictions. As noted previously, this will not be possible in practice.
+
+#### Range-of-Motion
+
+```{r}
+#| label: "tbl-rom_comp"
+#| tbl-cap: "Follow-up Range-of-Motion: Patient vs. Prediction"
+#| tbl-subcap: 
+#|   - "Baseline"
+#|   - "Follow-Up"
+#| layout-ncol: 2
+#| cap-location: bottom
+
+reset_gtsummary_theme()
+theme_gtsummary_compact()
+
+tbl_romPre
+tbl_romPost
+
+```
+
+#### Torsion
+
+```{r}
+#| label: "tbl-tor_comp"
+#| tbl-cap: "Follow-up Torsion: Patient vs. Prediction"
+#| tbl-subcap: 
+#|   - "Baseline"
+#|   - "Follow-Up"
+#| layout-ncol: 2
+#| cap-location: bottom
+
+reset_gtsummary_theme()
+theme_gtsummary_compact()
+
+tbl_torPre
+tbl_torPost
+
+```
+
+#### Spasticity
+
+```{r}
+#| label: "tbl-spa_comp"
+#| tbl-cap: "Follow-up Spasticity: Patient vs. Prediction"
+#| tbl-subcap: 
+#|   - "Baseline"
+#|   - "Follow-Up"
+#| layout-ncol: 2
+#| cap-location: bottom
+
+
+reset_gtsummary_theme()
+theme_gtsummary_compact()
+
+tbl_spaPre
+tbl_spaPost
+
+```
+
+#### Function, Mobility, and Ice Skating
+
+```{r}
+#| label: "tbl-fun_comp"
+#| tbl-cap: "Follow-up Function: Patient vs. Prediction"
+#| tbl-subcap: 
+#|   - "Baseline"
+#|   - "Follow-Up"
+#| layout-ncol: 2
+#| cap-location: bottom
+
+reset_gtsummary_theme()
+theme_gtsummary_compact()
+
+tbl_funPre
+tbl_funPost
+
+```

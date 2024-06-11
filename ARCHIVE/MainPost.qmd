@@ -1,0 +1,792 @@
+---
+title: "Predicting Gait Kinematics from Clinical Data"
+Author: "Michael H. Schwartz^1^, ^2^, Andrew G. Georgiadis^1^, ^2^, and Andrew J. Ries"
+Date: ""
+
+bibliography: references.bib
+csl: computers-in-biology-and-medicine.csl
+
+format:
+  docx:
+    toc: false
+    number-sections: true
+    number-depth: 1
+    highlight-style: github
+    reference-doc: word-template.docx
+    fig-dpi: 600
+    
+execute:
+    echo: false
+    warning: false
+    message: false
+    error: false
+---
+
+```{r}
+#| echo: false
+#| message: false
+
+# Set memory for BART -----
+options(java.parameters = "-Xmx32g")
+
+
+# Load libraries ---------------------------------------------------------------
+library(tidyverse)
+library(lubridate)
+library(patchwork)
+library(ggtext)
+library(RColorBrewer)
+library(glue)
+library(gt)
+library(gtsummary)
+library(ggpmisc)
+library(bartMachine)
+library(bartMan)
+
+
+# User Functions ---------------------------------------------------------------
+margin <- ggplot2::margin
+source("SCRIPTS/get_meas.R")
+source("SCRIPTS/get_pred.R")
+source("SCRIPTS/get_recon.R")
+source("SCRIPTS/predict_scores.R")
+
+
+# Make ggplot2 theme -----------------------------------------------------------
+theme_mhs <- theme_minimal() 
+theme_mhs <- theme_mhs %+replace%
+  theme(
+    plot.title = element_text(size = 10, hjust = 0),
+    plot.subtitle = element_text(size = 7, hjust = 0),
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 8),
+    axis.text = element_text(size = 6),
+    axis.title = element_text(size = 8),
+    strip.text = element_text(size = 5),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(linewidth = .2, color = "grey85")
+  )
+
+theme_set(theme_mhs)
+
+
+# For trimming white space around figures --------------------------------------
+knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
+```
+
+# Read and organize TD gait data 
+
+```{r}
+td <- read_csv("DATA/ControlKinematicsFMC.csv")
+
+# Fix names --------------------------------------------------------------------
+temp <- str_split_fixed(td$Row, "_", 2)
+var <- temp[,1]
+t <- temp[,2]
+
+var <- glue("Ang_{var}")
+var <- str_replace_all(var, "Tra", "_Trn")
+var <- str_replace_all(var, "Sag", "_Sag")
+var <- str_replace_all(var, "Cor", "_Cor")
+var <- str_replace_all(var, "Knee", "Kne")
+var <- str_replace_all(var, "Pelvis", "Pel")
+var <- str_replace_all(var, "Ankle", "Ank")
+var <- str_replace_all(var, "FootProgress", "Foo")
+var <- str_replace_all(var, "Trunk", "Trk")
+var <- str_sub(var, 5, 11)
+var <- str_replace(var, "_", "_Ang_")
+td$var <- var
+td$t <- t
+td <- 
+  td %>% 
+  mutate(Row = NULL) %>% 
+  relocate(c(var, t)) %>% 
+  mutate(t = 2*(as.numeric(t)-1))
+
+
+# Get TD "avg" (lwr, med, upr) -------------------------------------------------
+tdavg <- 
+  td %>% 
+  pivot_longer(-c(var, t)) %>% 
+  mutate(name = str_replace(name, "_L|_R", "")) %>% 
+  mutate(name = str_replace(name, "\\d+$", "")) %>% 
+  group_by(var, name, t) %>% 
+  mutate(
+    LRavg = mean(value)
+  ) %>% 
+  select(-value) %>% 
+  rename(value = LRavg) %>% 
+  distinct() %>% 
+  ungroup() %>% 
+  select(-name) %>% 
+  group_by(var, t) %>% 
+  mutate(
+    lwr = quantile(value, probs = .025),
+    med = quantile(value, probs = .5),
+    upr = quantile(value, probs = .975)
+  ) %>% 
+  select(-value) %>% 
+  distinct() %>% 
+  mutate(
+    var = str_replace_all(var, "_", "."),
+    type = "TD"
+  ) %>% 
+  rename(value = med)
+
+```
+
+# Read in average gait data from Read C3D Output
+
+```{r}
+dataroot <- "C:/Users/mschwartz/OneDrive - Gillette Children's Specialty Healthcare/Read C3D/OUTPUT"
+load(glue({dataroot},"/data_avg_current.RData"))
+```
+
+# Organize average data 
+
+```{r}
+# Set target curve -------------------------------------------------------------
+target = "Pel.Ang.Sag|Hip.Ang.Sag|Kne.Ang.Sag|Ank.Ang.Sag"
+# target = "Pel.Ang.Trn|Hip.Ang.Trn|Kne.Ang.Trn|Foo.Ang.Trn"
+# target = "Pel.Mom.Trn|Hip.Mom.Trn"
+target = "Kne.Ang.Sag"
+targetx <- str_replace_all(target, "\\.", "_")
+
+
+# Choose variable class (Ang, Mom, Pwr, Rxn) -----
+vclass <- str_extract(target, "\\.([^\\.]+)\\.")
+vclass <- str_remove_all(vclass, "\\.")
+vclass <- glue("{vclass}_avg")
+
+# Arrange -----
+dd <- 
+  list_rbind(get(vclass)) %>% 
+  filter(Year > 2005)
+
+ddw <- 
+  dd %>% 
+  select(side, t, name, Exam_ID, value) %>%
+  pivot_wider(names_from = c(side, Exam_ID), values_from = value) %>% 
+  arrange(name, t)
+
+# Remove columns with missing data -----
+ddw <- ddw %>% select(-which(colSums(is.na(ddw)) > 0))
+
+
+# Get limits for plotting -----
+ylim <- 
+  dd %>% 
+  filter(str_detect(name, target)) %>% 
+  reframe(
+    ylim = quantile(value, probs = c(.025, .975))
+  ) %>% 
+  mutate(ylim = sign(ylim) * 5 * round(abs(ylim)) %/%5 + 5*sign(ylim)) %>% 
+  .$ylim %>% 
+  as.numeric()
+```
+
+
+## Compute feature decomposition  
+
+```{r}
+# Get matrix of values ---------------------------------------------------------
+x <- 
+  ddw %>% 
+  filter(str_detect(name, target)) %>%
+  select(starts_with(c("L", "R"))) %>% 
+  as.matrix()
+
+
+# Get names of feature values --------------------------------------------------
+fnames <- 
+  ddw %>% 
+  filter(str_detect(name, target)) %>%
+  select(name) 
+
+
+# Get 10  features -------------------------------------------------------------
+res <- svd(x)
+features <- res$u[, 1:length(res$d)]
+
+crit = .95
+plot(cumsum(res$d)/sum(res$d))
+abline(h = crit)
+ncrit <- first(which(round(cumsum(res$d)/sum(res$d), 2) == crit))
+
+
+# Organize features ------------------------------------------------------------
+f <- as_tibble(features) %>% 
+  mutate(
+    var = fnames$name,
+    t = rep(seq(0, 100, 2), nrow(features)/51)
+  ) %>% 
+  relocate(t, var) %>% 
+  pivot_longer(-c(t, var)) %>% 
+  rename(feature = name) %>% 
+  mutate(
+    feature = fct_inorder(feature)
+  )
+
+scores <- as_tibble(t(res$u)[1:ncrit,] %*% x)
+
+
+# Organize scores --------------------------------------------------------------
+s <- 
+  scores %>% 
+  mutate(sname = glue("Feat_target_{row_number()}")) %>% 
+  relocate(sname) %>% 
+  pivot_longer(-sname, names_to = c("side", "Exam_ID"), names_sep = "_") %>% 
+  pivot_wider(names_from = sname, values_from = value)
+```
+
+## Get clinical data from RRFMP output
+
+```{r}
+#| include: false
+#| label: read-organize-data
+
+# Read and organize data -------------------------------------------------------
+dat0 <- readRDS("DATA/FDpp_2023-09-23.RDS")
+
+# Organize data
+dat <- 
+  dat0 %>% 
+  filter(
+    # dx == "Cerebral palsy",
+    agePost <= 18,
+    !is.na(GDI),
+    Sex != "Missing",
+    Event_Date > as.Date("2005-12-31")
+  ) %>% 
+  mutate(
+    dx = fct_drop(dx),
+    dx = fct_lump_min(dx, 50),
+    dxmod = fct_drop(dxmod),
+    dxmod = fct_lump_min(dxmod, 10),
+    Year = year(Event_Date)
+  ) %>% 
+  # Recode STR: Low, Med, High
+  mutate(
+    across(
+      matches("_STR", ignore.case = F),
+      ~ fct_collapse(., "Low" = c(0, 1), "Med" = c(2, 3), "High" = c(4, 5))
+    )
+  ) %>% 
+  # Recode SPA: Low, Med, High
+  mutate(
+    across(
+      matches("_SPAS", ignore.case = F),
+      ~ fct_collapse(., "None" = c(0), "Mod" = c(1, 2), "Sev" = c(3, 4))
+    )
+  ) %>% 
+  mutate(
+    across(
+      where(is.factor),
+      ~ fct_lump_min(., 30, other_level = "Missing")
+    )
+  ) %>% 
+  drop_na(starts_with("Feat_Ang")) %>% 
+  as_tibble()
+
+
+# Split FDODFEO into FDO + DFEO ------------------------------------------------
+dat$prior_Femoral_Derotation_Osteotomy <- 
+  dat$prior_Femoral_Derotation_Osteotomy + dat$prior_FDO_DFEO
+dat$prior_DFEO <- 
+  dat$prior_DFEO + dat$prior_FDO_DFEO
+
+dat$interval_Femoral_Derotation_Osteotomy <- 
+  dat$interval_Femoral_Derotation_Osteotomy + dat$interval_FDO_DFEO
+dat$interval_DFEO <- 
+  dat$interval_DFEO + dat$interval_FDO_DFEO
+
+dat$prior_Femoral_Derotation_OsteotomyPost <- 
+  dat$prior_Femoral_Derotation_OsteotomyPost + dat$prior_FDO_DFEOPost
+dat$prior_DFEOPost <- 
+  dat$prior_DFEOPost + dat$prior_FDO_DFEOPost
+
+dat <- 
+  dat %>% 
+  select(-c(prior_FDO_DFEO, interval_FDO_DFEO, prior_FDO_DFEOPost))
+
+```
+
+# Add scores to data 
+
+```{r}
+# Post Scores
+sPost <- 
+  s %>% 
+  rename_with( ~ glue("{.}Post"), starts_with("Feat_target")) %>% 
+  rename(Exam_IDPost = Exam_ID)
+
+# Add scores to dat
+dat <- 
+  dat %>% 
+  left_join(s, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID")) %>% 
+  left_join(sPost, by = c("SIDE" = "side", "Exam_IDPost" = "Exam_IDPost")) %>% 
+  drop_na(starts_with("Feat_target"))
+```
+
+# Get predictors
+
+```{r}
+# Choose Features --------------------------------------------------------------
+v <- names(dat)
+
+# Angles
+vang <- str_subset(v, "(?!.*Post)_Ang_")
+vang <- str_subset(vang, "Feat", negate = T)
+
+# Features
+vfeat <- str_subset(v, "(?!.*Post)Feat_Ang")
+vtarget <- str_subset(v, "(?!.*Post)Feat_target")
+
+# Diagnosis
+vdx <- c("dxmod", "affected")
+# Descriptive
+vdesc <- c("age", "HEIGHT", "WEIGHT", "Sex", "SIDE")
+# Birth History
+vbirth <- c("NICU_Weeks", "Delivery_Weeks", "Ventilator_Weeks")
+# Developmental History
+vdev <- c("AGE_AT_DIAG", "DEV_FIRST_STEP", "DEV_WALK")
+# Physical therapy program
+vpt <- c("PTfreq", "PTprog")
+# Function
+vfunc <- c("GMFCS", "FAQ", "FAQT")
+# Prior treatment
+vprior <- str_subset(v, "(?!.*Post)^prior")
+# vprior <- str_subset(v, str_replace_all(big12, "interval", "prior"))
+# vprior <- str_subset(vprior, "Post", negate = T)
+# Interval treatment
+vinterval <- str_subset(v, "interval_")
+# Range of motion
+vrom <- c("HIP_EXT", "HIP_ABD_0", "POP_ANG_UNI", "KNEE_EXT", "EXTEN_LAG", 
+          "ANK_DORS_0", "ANK_DORS_90")
+# Bony torsion
+vtor <- c("ANTEVERSION", "BIMAL")
+# Foot
+vfoot <- str_subset(v, "(?!.*Post)(^WB_|^NWB_)")
+# Neurological exam
+vneuro <- str_subset(v, "SEL$|STR$|SPAS$")
+# Stride parameters - which could be obtained via stopwatch and clicker
+# vstride <- c("NDspeed", "NDsteplen")
+
+vPre <-  c("Patient_ID", "Exam_ID",
+           vdx, vdesc, vbirth, vdev, vpt, vfunc,
+           vrom, vtor, vfoot, vneuro,
+           vprior)
+
+vPost <- c("Patient_ID", "Exam_ID", 
+           vdx, vdesc, vbirth, vdev, vpt, vfunc,
+           vrom, vtor, vfoot, vneuro,
+           vprior, vinterval, vtarget)
+
+vlm <- c("Patient_ID", "Exam_ID", "Exam_IDPost",
+         vdx, vdesc, vfunc, vrom, vtor, vneuro,
+         vprior, vang, vfeat)
+
+```
+
+# Build models to predict Post feature scores
+
+```{r}
+#| cache: true
+#| include: false
+#| label: build-models
+
+# Choose predictdors
+v <- vPost
+
+# Generate test/train split ----------------------------------------------------
+set.seed(42)
+
+ix <- sample(c(TRUE, FALSE), nrow(dat), replace=TRUE, prob=c(0.5,0.5))
+dat_train <- dat[ix,]
+dat_test <- dat[!ix,]
+
+
+# Organize model data ----------------------------------------------------------
+xmods <- 
+  dat_train %>% 
+  select(all_of(v)) %>% 
+  select(-c(Patient_ID, Exam_ID)) %>% 
+  data.frame()
+
+
+# Generate models feature scores -----------------------------------------------
+nftrain <- ncrit
+
+for (kk in 1:nftrain) {
+  y <- dat_train[[glue("Feat_target_{kk}Post")]]
+  mod <- bartMachine(xmods, y, use_missing_data = T)
+  assign(glue("mod{kk}"), mod)
+}
+```
+
+# Compare prediction to measured 
+
+```{r}
+# choose exam and side ---------------------------------------------------------
+# iscore <- which(predict(mod1, dat_test[names(mod1$X)]) < 0)
+# ix <- sample(iscore, 1)
+
+icrouch <- which(dat_test$meansta_Kne_Ang_Sag > 30 & dat_test$KNEE_EXT > 5)
+ix <- sample(icrouch, 1)
+
+# icalc <- which(dat_test$maxsta_Ank_Ang_Sag > 5)
+# ix <- sample(icalc, 1)
+
+# istiff <- which(dat_test$maxswi_Kne_Ang_Sag < 45 & between(dat_test$minsta_Kne_Ang_Sag, 10, 30))
+# ix <- sample(istiff, 1)
+
+# ihams <- which(dat_test$ic_Kne_Ang_Sag > 25 & dat_test$POP_ANG_UNI > 70 & dat_test$KNEE_EXT < 5)
+# ix <- sample(ihams, 1)
+
+# ihip <- which(dat_test$meansta_Hip_Ang_TrnPost > 20)
+# ix <- sample(ihip, 1)
+
+# ikneeint <- which(dat_test$BIMAL < 0 & dat_test$meansta_Kne_Ang_Trn > 0)
+# ikneeext <- which(dat_test$BIMAL > 30 & dat_test$meansta_Kne_Ang_Trn < -25)
+# ix <- sample(ikneeint, 1)
+
+# iank <- which(dat_test$ic_Ank_Ang_Sag < -10 & dat_test$ANK_DORS_90 < 5)
+# ix <- sample(iank, 1)
+
+# ix <- sample(1:nrow(dat_test), 1)
+
+ex <- dat_test$Exam_ID[[ix]]
+sd <- dat_test$SIDE[[ix]]
+exPost <- dat_test$Exam_IDPost[[ix]]
+sdPost <- dat_test$SIDEPost[[ix]]
+
+xample <- dat_test[ix, names(mod1$X)]
+
+
+# Choose number of features to use -----
+nfuse = ncrit
+
+
+# Get measured curves -----
+measured <- 
+  get_meas(dd, ex, sd, target) %>% 
+  rename(var = name) %>% 
+  mutate(
+    var = fct_drop(var)
+  ) %>% 
+  mutate(
+    type = "MeasuredPre",
+    lwr = NA,
+    upr = NA
+  )
+
+measuredPost <- 
+  get_meas(dd, exPost, sd, target) %>% 
+  rename(var = name) %>% 
+  mutate(
+    var = fct_drop(var)
+  ) %>% 
+  mutate(
+    type = "MeasuredPost",
+    lwr = NA,
+    upr = NA
+  )
+
+
+# Harmonize TD var factor levels -----
+tdtemp <- 
+  tdavg %>% 
+  filter(var %in% measured$var) %>% 
+  mutate(
+    var = factor(var, levels = levels(measured$var)),
+    value = NA
+  )
+
+
+# Get reconstructed curve -----
+recon <- 
+  get_recon(d=dat_test, ex, sd, features, targetx, nf=nfuse, pp="Pre")%>% 
+  mutate(
+    var = factor(var, levels = c(1:max(var)), labels = levels(measured$var))
+  ) %>% 
+  mutate(
+    type = "Reconstructed",
+    lwr = NA,
+    upr = NA
+  )
+
+reconPost <- 
+  get_recon(d=dat_test, exPost, sd, features, targetx, nf=nfuse, pp="Post")%>% 
+  mutate(
+    var = factor(var, levels = c(1:max(var)), labels = levels(measured$var))
+  ) %>% 
+  mutate(
+    type = "Reconstructed",
+    lwr = NA,
+    upr = NA
+  )
+
+
+# Get predicted curve -----
+predPost <-
+  get_pred(dat_test, exPost, sd, features, nsim=200, nf=nfuse, pp="Post") %>%
+  mutate(
+    var = factor(var, levels = c(1:max(var)), labels = levels(measured$var))
+  ) %>%
+  mutate(type = "predicted") %>%
+  rename(value = med)
+
+
+# Organize results -----
+temp <- 
+  bind_rows(tdtemp, measured, measuredPost, predPost) %>% 
+  mutate(type = fct_inorder(type))
+
+
+# Plot results -----
+ggplot(temp, aes(
+  x = t,
+  y = value,
+  group = type,
+  color = type,
+  fill = type,
+  linetype = type,
+)) +
+  facet_wrap(~ var, scales = "free_y", ncol = 2) +
+  geom_line(linewidth = 1) +
+  geom_ribbon(
+    aes(ymin = lwr, ymax = upr),
+    color = NA,
+    alpha = .3
+  ) +
+  ylab("Value") + 
+  xlab("Percent Gait Cycle") +
+  labs(
+    title = target,
+    subtitle = glue("Exam Pre = {ex}, Exam Post = {exPost}, Side {sd}")
+  )  +
+  scale_color_manual(
+    values = c("firebrick1", "dodgerblue", "dodgerblue3", "grey70"),
+    breaks = c("MeasuredPre", "MeasuredPost", "predicted", "TD")
+  ) +
+  scale_fill_manual(
+    values = c("firebrick1", "dodgerblue", "dodgerblue3", "grey70"),
+    breaks = c("MeasuredPre", "MeasuredPost", "predicted", "TD")
+  ) +
+  scale_linetype_manual(
+    values = c("solid", "solid", "dotted", "solid"),
+    breaks = c("MeasuredPre", "MeasuredPost", "predicted", "TD")
+  ) +
+  coord_cartesian(ylim = c(floor(ylim[1]), ceiling(ylim[2]))) +
+  guides(
+    fill = guide_legend(title = ""),
+    color = guide_legend(title = ""),
+    linetype = guide_legend(title = "")) +
+  theme(
+    legend.position = "bottom",
+    strip.text = element_text(margin=margin(b=2)),
+    aspect.ratio = .8
+  )
+
+# ggsave(glue("OUTPUT/{exPost}_{sd}.png"), width = 6, height = 4, dpi = 300, bg = "white")
+
+```
+
+# Simulate treatment
+
+```{r}
+# Simulate treatment -----
+dat_test_simRx <-
+  dat_test %>%
+  mutate(
+    across(
+      starts_with("interval"),
+      ~ 0
+    ) %>% 
+      mutate(
+        interval_Rectus_Transfer = 1
+      )
+  )
+
+predPost_simRx <-
+  get_pred(dat_test_simRx, exPost, sd, features, nsim=200, nf=nfuse, pp="Post") %>%
+  mutate(
+    var = factor(var, levels = c(1:max(var)), labels = levels(measured$var))
+  ) %>%
+  mutate(type = "predicted_sim") %>%
+  rename(value = med)
+
+tempsim <- bind_rows(tdtemp, measured, predPost, predPost_simRx)
+
+ggplot(tempsim, aes(
+  x = t,
+  y = value,
+  group = type,
+  color = type,
+  fill = type,
+  linetype = type,
+)) +
+  facet_wrap(~ var, scales = "free_y") +
+  geom_line(linewidth = 1) +
+  geom_ribbon(
+    aes(ymin = lwr, ymax = upr),
+    color = NA,
+    alpha = .2
+  ) +
+  ylab("Value") + 
+  xlab("Percent Gait Cycle") +
+  labs(
+    title = target,
+    subtitle = glue("Exam Pre = {ex}, Exam Post = {exPost}, Side {sd}")
+  )  +
+  scale_color_manual(
+    values = c("firebrick1", "dodgerblue", "dodgerblue4", "grey70"),
+    breaks = c("MeasuredPre", "predicted", "predicted_sim", "TD")
+  ) +
+  scale_fill_manual(
+    values = c("firebrick1", "dodgerblue", "dodgerblue4", "grey70"),
+    breaks = c("MeasuredPre", "predicted", "predicted_sim", "TD")
+  ) +
+  scale_linetype_manual(
+    values = c("solid", "dotted", "dashed", "solid"),
+    breaks = c("MeasuredPre", "predicted", "predicted_sim", "TD")
+  ) +
+  coord_cartesian(ylim = ylim) +
+  guides(
+    linetype= guide_legend(title = ""),
+    fill = guide_legend(title = ""),
+    color = guide_legend(title = "")
+  ) + 
+  theme(
+    legend.position = "bottom",
+    strip.text = element_text(margin=margin(b=2)),
+    aspect.ratio = .8
+  )
+
+# ggsave(glue("OUTPUT/{exPost}_{sd}_sim.png"), width = 6, height = 4, dpi = 300, bg = "white")
+
+```
+
+# Try matching method 
+
+```{r}
+library(MatchIt)
+
+# Choose number of matches for nearest neighbor ------------------------------
+nmatch = 20
+
+
+# Choose matching variables --------------------------------------------------
+genvars <- str_subset(v, "age|Sex|GMFCS")
+
+featvars <- str_subset(v, "Feat_target")
+
+neurovars <- str_subset(v, "SEL$|STR$|SPAS$|^DMC$")
+neurovars <- str_subset(neurovars, "^ADD|^HAMS|^HIP|^KNE|^PLANT|^RECT")
+
+romvars <- str_subset(v, "^HIP|^KNE|^ANK|^POP|^ANTE|^BIM|^PATE")
+romvars <- str_subset(romvars, "SEL$|STR$|SPAS$", negate = T)
+
+footvars <- c("WB_MIDFT_POS", "WB_4FTPOS2")
+
+priorvars <- str_subset(v, "^prior")
+
+intervalvars <- str_subset(v, "Hams|DFEO|Patellar|Neural_Rhizotomy")
+intervalvars <- str_subset(intervalvars, "prior|Neurolysis", negate = T)
+
+matchvars <- c(genvars, featvars, neurovars, romvars, intervalvars)
+
+
+# Don't match on NA patient data ---------------------------------------------
+# browser()
+misspt <- glue_collapse(names(xpt)[is.na(xpt)], sep = "|")
+matchvars <- str_subset(featvars, misspt, negate = T)
+
+
+# Fill missing from comparison data ------------------------------------------
+d <- dat %>% 
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = T), .))) %>%
+  drop_na(all_of(matchvars))
+
+
+# Build matching formula -----------------------------------------------------
+rhs <- glue_collapse(c(featvars, intervalvars), sep = " + ")
+form <- as.formula(glue("target ~ {rhs}"))
+rhsinterval <- glue_collapse(c(intervalvars), sep = " + ")
+forminterval <- as.formula(glue(" ~ {rhsinterval}"))
+
+
+# Add target data ------------------------------------------------------------
+xpt <- 
+  dat %>% 
+  filter(Exam_ID == ex, SIDE == sd)
+
+d <- bind_rows(d, xpt)
+d$target <- 0
+d$target[nrow(d)] <- 1
+
+
+# Get the match --------------------------------------------------------------
+set.seed(42)
+m.out <-
+  matchit(
+    form,
+    data = d,
+    distance = "mahalanobis",
+    exact = forminterval,
+    # method = "nearest",
+    ratio = nmatch,
+    replace = FALSE
+  )
+
+dat_match <- 
+  d[m.out$match.matrix, ]
+
+matchlist_pre <- 
+  dat_match %>% 
+  select(Exam_ID, SIDE) %>% 
+  mutate(
+    Exam_ID = as.integer(Exam_ID)
+  )
+
+matchlist_post <- 
+  dat_match %>% 
+  select(Exam_IDPost, SIDE) %>% 
+  mutate(
+    Exam_ID = as.integer(Exam_IDPost)
+  )
+
+dd_match_pre <- 
+  dd %>% 
+  inner_join(matchlist_pre) %>% 
+  mutate(status = "Pre")
+
+dd_match_post <- 
+  dd %>% 
+  inner_join(matchlist_post) %>% 
+  mutate(status = "Post")
+
+temp_match <- 
+  bind_rows(dd_match_pre, dd_match_post) %>% 
+  mutate(status = factor(status, levels = c("Pre", "Post")))
+
+
+temp_measured <- 
+  bind_rows(measured %>% mutate(status = "Pre"), measuredPost %>% mutate(status = "Post")) %>% 
+  mutate(status = factor(status, levels = c("Pre", "Post")))
+
+ggplot(temp_match %>% filter(name == "Kne.Ang.Sag"), aes(x=t, y=value, color = status)) + 
+  geom_line(aes(group=interaction(Exam_ID, side)), linewidth = .4, alpha = .2) + 
+  geom_line(data = temp_measured, aes(color = status), linewidth = 1.75) +
+  scale_color_manual(values = c("firebrick", "dodgerblue")) +
+  facet_wrap(~status) + 
+  coord_cartesian(ylim = ylim) +
+  theme(
+    aspect.ratio = .8,
+    legend.position = "bottom"
+  )
+
+```
+
+
+

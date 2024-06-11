@@ -1,0 +1,1064 @@
+---
+title: "EB GAIT"
+subtitle: "Evidence Based Gait Analysis Interpretation Technique"
+Author: ""
+Date: ""
+
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    toc-title: "Section"
+    fig-dpi: 600
+    embed-resources: true
+    theme:
+      - cosmo
+    grid:
+      body-width: 1050px
+      sidebar-width: 250px
+      margin-width: 0px
+      
+lightbox: true
+
+knitr:
+  opts_chunk:
+    warning: false
+    message: false
+    cache.lazy: false
+    screenshot.force: true
+    fig.path: FIGURES/
+
+html-table-processing: none
+    
+execute:
+  echo: false
+  warning: false
+  message: false
+  error: false
+    
+params:
+  MRN: 444383
+  Event_Date: "2024-06-03"
+  deid: FALSE
+  usegait: TRUE
+  figsave: FALSE
+---
+
+```{r}
+#| label: libraries-themes-etc
+#| echo: false
+#| message: false
+#| warning: false
+
+# Packages -----
+options(java.parameters = "-Xmx32g")
+library(bartMachine, verbose = F)
+library(tidyverse, verbose = F)
+library(lubridate, verbose = F)
+library(patchwork, verbose = F)
+library(ggtext, verbose = F)
+library(RColorBrewer, verbose = F)
+library(glue, verbose = F)
+library(gt, verbose = F)
+library(gtsummary, verbose = F)
+library(ggpmisc, verbose = F)
+library(MatchIt, verbose = F)
+library(ggh4x, verbose = F)
+library(extraDistr, verbose = F)
+library(iml, verbose = F)
+library(Hmisc, verbose = F)
+library(colorspace, verbose = F)
+library(MatchIt, verbose = F)
+
+# User Functions -----
+margin <- ggplot2::margin
+summarize <- dplyr::summarize
+select <- dplyr::select
+formals(table)$useNA <- "ifany"
+source("SCRIPTS/read_and_organize.R")
+source("SCRIPTS/addnoise.R")
+source("SCRIPTS/get_TD_NEW.R")
+source("SCRIPTS/build_propensity_mod.R")
+source("SCRIPTS/get_prop_model_vars.R")
+source("SCRIPTS/prop_shap_plot.R")
+source("SCRIPTS/prop_detail_plot.R")
+source("SCRIPTS/pmatch_plot.R")
+source("SCRIPTS/get_outcome_vars.R")
+source("SCRIPTS/pmatch_data.R")
+source("SCRIPTS/outcome_plots.R")
+source("SCRIPTS/p_match_qual.R")
+source("SCRIPTS/chkmatchlims.R")
+source("SCRIPTS/test_pred_perf.R")
+source("SCRIPTS/noisify_side.R")
+source("SCRIPTS/getnoisevars.R")
+source("SCRIPTS/prop_shap_table.R")
+source("SCRIPTS/fmt_shap.R")
+source("SCRIPTS/fmt_shapLR.R")
+source("SCRIPTS/ptableLR.R")
+source("SCRIPTS/getq.R")
+source("SCRIPTS/fmt_chk.R")
+source("SCRIPTS/get_varlabs.R")
+source("SCRIPTS/plot_development.R")
+source("SCRIPTS/get_meanscores.R")
+source("SCRIPTS/pred_outcome_by_bart.R")
+source("SCRIPTS/outcome_plots_BART.R")
+source("SCRIPTS/get_pred_vars.R")
+
+# Theme for ggplot2 -----
+theme_mhs <- theme_minimal(base_size = 7) 
+theme_mhs <- function(bs){
+  theme_minimal(base_size = bs) %+replace%
+    theme(
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(linewidth = .1, color = "grey85")
+    )
+}
+theme_set(theme_mhs(7))
+
+# For trimming white space around figures -----
+knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
+
+# For controlling video extraction -----
+getvids <- !params$deid
+```
+
+```{r}
+#| label: read-TD-make-labels
+#| include: false
+
+# Read and organize TD gait data -----
+tdavg <- get_TD_NEW()
+
+# Get labels (variable, and pos/neg directions) -----
+varlabs <- get_varlabs()
+vlabs <- varlabs$Label
+names(vlabs) <- varlabs$Variable 
+xlabs <- names(vlabs)
+names(xlabs) <- vlabs
+
+neglabs <- varlabs$negdir
+names(neglabs) <- varlabs$Variable
+poslabs <- varlabs$posdir
+names(poslabs) <- varlabs$Variable
+
+# Read outcome setup -----
+outcome_setup <- readxl::read_xlsx("DATA/Outcome_Setup_Custom.xlsx", sheet = "Main")
+outcome_setup <- 
+  outcome_setup %>% 
+  mutate(
+    out1 = xlabs[out1],
+    out2 = xlabs[out2],
+    out3 = xlabs[out3],
+    out4 = xlabs[out4]
+  ) %>% 
+  pivot_longer(-surg)
+```
+
+```{r}
+#| label: read-organize-data
+#| include: false
+
+# Get clinical data from RRFMP output -----
+if(file.exists("DATA/preprocessed_data_2024-05-25.RDS")){
+  dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
+  dat <- readRDS("DATA/preprocessed_data_2024-05-25.RDS")
+  dat <- get_meanscores(dat, "Pre")
+  dat <- get_meanscores(dat, "Post")
+} else {
+  dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
+  dat <- read_and_organize(dat0)
+  dat <- get_meanscores(dat, "Pre")
+  dat <- get_meanscores(dat, "Post")
+}
+
+# Get all pre- data (used in GOAL table, etc...) -----
+datpre <- readRDS("DATA/FD_2024-05-25.RDS")
+datpre <- read_and_organize(datpre)
+datpre <- get_meanscores(datpre, "Pre")
+```
+
+```{r}
+#| label: load-or-build-propensity-models
+#| include: false
+
+# List of surgeries -----
+surglist <- c("Femoral_Derotation_Osteotomy", "Tibial_Derotation_Osteotomy", "Psoas_Release", "Hams_Lengthening", "Adductor_Release", "Gastroc_Soleus_Lengthening", "DFEO_Patellar_Advance", "Patellar_Advance",  "Foot_and_Ankle_Bone", "Foot_and_Ankle_Soft_Tissue","Neural_Rhizotomy", "Rectus_Transfer")
+
+# Loop over list -----
+for (s in surglist) {
+  if(file.exists(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))){
+    # Load model
+    load(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))
+    assign(glue("mod_{s}"), slist[[1]])
+    assign(glue("opt_{s}"), slist[[2]])
+    mod <- get(glue("mod_{s}"))
+  } else {
+    # Build model
+    surg <- glue("interval_{s}")
+    res <- build_propensity_mod(s, dat, fp2fn=1)
+    mod <- res$mod
+    opt <- res$opt
+    metrics <- res$metrics
+    # Save model
+    slist <- list(mod, opt)
+    names(slist) <- c(glue("mod_{s}"), glue("opt_{s}"))
+    fmod <- glue("OUTPUT/Propensity_Models/prop_{s}.RDATA")
+    save(slist, file = fmod)
+  }
+}
+```
+
+```{r}
+#| label: compute-all-propensities
+#| cache: false
+
+# Compute propensities -----
+if(is.null(dat$p_Femoral_Derotation_Osteotomy)){
+  for (s in surglist) {
+    cat("Computing Propensity for Surgery ", s, "\n")
+    mod <- get(glue("mod_{s}"))
+    set.seed(42)
+    dat[[glue("p_{s}")]] <- predict(mod, dat[names(mod$X)])
+  }
+  saveRDS(dat, glue("DATA/preprocessed_data_{as.Date(now())}.RDS"))
+}
+```
+
+```{r}
+#| label: read-patient-data
+#| cache: false
+
+source("SCRIPTS/read_c3d_one.R")
+source("SCRIPTS/make_FD_one.R")
+source("SCRIPTS/get_file_list.R")
+library(DBI)
+
+# Option to do analysis without gait data -----
+# If usegait = TRUE but no gait data is present things still work
+if(params$usegait){
+  datc3d <- read_c3d_one(params$MRN, tt=17)
+  datc3d_afo <- read_c3d_one(params$MRN, tt=18)
+  plotgait <- !is.null(datc3d)
+} else {
+  datc3d <- NULL
+  datc3d_afo <- NULL
+  plotgait <- !is.null(datc3d)
+}
+
+# Build patient FD and FDpp data -----
+fd <- make_FD_one(datc3d, params$MRN)
+
+# Add NA for missing variables - this is for limbs without gait data -----
+if(params$usegait == FALSE){
+  vall <- names(datpre)
+  vFD <- names(fd$FD)
+  vadd <- vall[!(vall %in% vFD)]
+  fd$FD[vadd] <- NA
+}
+
+# Get visit of interest -----
+xpt <- 
+  fd$FD %>% 
+  filter(
+    MRN == params$MRN, 
+    year(Event_Date) == year(as.Date(params$Event_Date)),
+    month(Event_Date) == month(as.Date(params$Event_Date)),
+    day(Event_Date) == day(as.Date(params$Event_Date))
+  ) |>
+  read_and_organize()
+
+# Add average spa, sel, str, wb, nwb -----
+xpt <- get_meanscores(xpt, "Pre")
+
+# Format name and date -----
+if(!params$deid){
+  ptname <- glue("{xpt$Child_First} {xpt$Child_Last}")[1]
+  ptdate <- format(as.Date(params$Event_Date), "%b %d, %Y")
+  ptmrn <- xpt$MRN[1]
+} else {
+  ptname <- ifelse(xpt$Sex[1] == F, "Trillian Astra", "Arthur Dent")
+  ptdate <- format(as.Date(params$Event_Date), "%b %Y")
+  ptmrn <- xpt$Exam_ID[1]
+}
+```
+
+## Background
+
+::: {#background .panel-tabset}
+### Patient
+
+```{r}
+#| label: patient-summary
+#| cache: false
+
+if(!params$deid){
+  tit <- glue("{ptname} ({ptmrn}), Exam Date: {ptdate}")
+} else {
+  tit <- glue("{ptname} ({ptmrn}), Exam Date: {ptdate}")
+}
+
+tdat <- 
+  xpt |> 
+  filter(SIDE == "L") |> 
+  select(age, dx, dxmod, dxside, GMFCS, FAQ) |> 
+  mutate(age = round(age,1)) |> 
+  rename_with(
+    .fn = ~ vlabs[.],
+    .cols = everything()
+  )
+
+ptsumm <- 
+  tdat |> 
+  gt() |> 
+  tab_header(tit) |> 
+  tab_style(
+    style = cell_text(align = "center"),
+    locations = list(cells_body(), cells_column_labels())
+  ) |> 
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) |> 
+  cols_width(
+    c(Age, Diagnosis, `Diagnosis Modifier`, GMFCS) ~ px(100),
+    `Functional Assessment Questionnaire` ~ 200
+  )
+
+ptsumm
+
+# Save for external use -----
+if(params$figsave){
+  gtsave(ptsumm, "FIGURES/Patient_Summary.png")
+}
+```
+
+### Patient History
+
+```{r}
+#| label: get-more-patient-info
+#| cache: false
+
+source("SCRIPTS/get_patient_info.R")
+pi <- get_patient_info(xpt, params$deid) 
+```
+
+::: {.panel-tabset .nav-pills}
+#### Birth
+
+```{r}
+pi$tbirth
+# Save for external use -----
+if(params$figsave){
+  gtsave(pi$tbirth, "FIGURES/Birth_History.png")
+}
+```
+
+#### Gait
+
+```{r}
+pi$tdev
+# Save for external use -----
+if(params$figsave){
+  gtsave(pi$tdev, "FIGURES/Gait_Development.png")
+}
+```
+
+#### Treatment
+
+```{r}
+pi$tsurg
+# Save for external use -----
+if(params$figsave){
+  gtsave(pi$tsurg, "FIGURES/Treatment_History.png", expand = c(0, 40, 50, 0))
+}
+```
+:::
+
+### Gait Outcome Assessment List (GOAL)
+
+::: {.panel-tabset .nav-pills}
+#### GOAL Summary
+
+```{r}
+#| label: GOAL-survey
+#| cache: false
+
+source("SCRIPTS/build_goaltbl.R")
+
+# Build goal table -----
+t_goal <- build_goaltbl(xpt, datpre)
+
+# Display if GOAL info exists -----
+if(!is.null(t_goal)) t_goal
+
+# Save for external use -----
+if(params$figsave){
+  gtsave(t_goal, "FIGURES/GOAL_Summary.png")
+}
+```
+
+#### Very Important GOALs
+
+```{r}
+#| label: v-important-goals
+#| cache: false
+
+source("SCRIPTS/get_goal.R")
+source("SCRIPTS/build_importanttbl.R")
+
+# Get goal table data -----
+goal <- get_goal(params)
+
+# Build importance table -----
+t_imp <- build_importanttbl(goal, params)
+
+# Display if GOAL info exists -----
+if(!is.null(t_imp)) t_imp
+
+# Save for external use -----
+if(params$figsave){
+  gtsave(t_imp, "FIGURES/GOAL_Importance.png", expand = c(0, 40, 50, 0))
+}
+```
+:::
+:::
+
+## Video
+
+```{r}
+#| label: get-video
+#| eval: !expr getvids
+#| include: false
+#| cache: false
+
+# List of all videos -----
+temp <- fd$FD %>% arrange(rev(age))
+ages <- temp$age %>% unique()
+
+# Labels for videos -----
+yrs <- trunc(ages)
+mos <- round(12 * (ages - yrs))
+vidlabs <- glue("{yrs}yr_{mos}mo")
+vidlist <- glue("{vidlabs}.mp4")
+vidfile <- temp %>% filter(SIDE == "L") %>% pull(Video_File)
+
+# Remove existing local videos and compress new -----
+temp <- list.files(pattern = ".mp4$")
+
+if(!(all(vidlist %in% temp))){
+  # Remove old
+  unlink(temp)
+  
+  # Compress all videos
+  vidname <- vector()
+  for (kk in 1:length(vidlist)) {
+    
+    curr.vid <- vidfile[kk]
+    vidname[kk] <- glue("{vidlabs[[kk]]}.mp4")
+    
+    ffmpeg_command <-
+      paste(
+        "ffmpeg -i",
+        curr.vid,
+        "-c:v libx264 -crf 30",
+        vidname[kk]
+      )
+    
+    system(ffmpeg_command)
+  }
+} else {
+  vidname <- vidlist
+}
+```
+
+```{r}
+#| label: show-video
+#| eval: !expr getvids
+#| results: asis
+#| panel: tabset
+
+for (kk in 1:length(vidname)) {
+  cat("\n\n###", str_replace(vidlabs[kk], "_", " + "), "  \n\n")
+  cat("\n\n <video width=800 controls>
+  <source src=", vidname[kk], " type=video/mp4>
+  </video> \n\n")
+}
+```
+
+## Treatment Assignment
+
+::: {#treatment-assignment .panel-tabset}
+### Propensity Profile
+
+The likelihood that the limb would have undergone the indicated surgery based on historical practice standards.  
+
+> <center>![](DATA/caution.jpeg){width="2in"}\
+> *Meeting historical standards **does not** ensure a good outcome.\
+> Check **Outcome Predictions** tab for additional information.*</center>
+
+```{r}
+#| label: compute-propensity
+#| cache: false
+#| include: false
+
+# Add NA for missing features - this is for limbs without gait data -----
+vall <- names(datpre)
+vx <- names(xpt)
+vadd <- vall[!(vall %in% vx)]
+xpt[vadd] <- NA
+
+post <- list()
+for (s in surglist) {
+  mod <- get(glue("mod_{s}"))
+  
+  set.seed(42)
+  xpt[glue("p_{s}")] <- predict(mod, xpt[names(mod$X)])
+  post[[s]] <- bart_machine_get_posterior(mod, xpt[names(mod$X)])
+}
+
+xL <- xpt |> filter(SIDE == "L")
+xR <- xpt |> filter(SIDE == "R")
+```
+
+```{r}
+#| label: display-profile
+#| cache: false
+
+# Compute propensity as mean of posterior -----
+propLmean <- 
+  surglist %>% 
+  map(\(ss) mean(post[[ss]]$y_hat_posterior_samples[1,])) %>% 
+  unlist()
+
+propRmean <- 
+  surglist %>% 
+  map(\(ss) mean(post[[ss]]$y_hat_posterior_samples[2,])) %>% 
+  unlist()
+
+# Compute 5th and 95th and organize. Note "q50" is mean, not median! -----
+propL <- 
+  surglist %>% 
+  map_df(\(ss) quantile(post[[ss]]$y_hat_posterior_samples[1,], probs = c(.05, .95))) %>% 
+  mutate(Surgery = str_replace_all(surglist, "_", " ")) %>% 
+  mutate(SIDE = "L") %>% 
+  rename(q5=`5%`, q95=`95%`) %>% 
+  mutate(q50 = propLmean) %>% 
+  mutate(
+    across(
+      starts_with("q"),
+      ~ round(100 * .)
+    )
+  )
+
+propR <- 
+  surglist %>% 
+  map_df(\(ss) quantile(post[[ss]]$y_hat_posterior_samples[2,], probs = c(.05, .95))) %>% 
+  mutate(Surgery = str_replace_all(surglist, "_", " ")) %>% 
+  mutate(SIDE = "R") %>% 
+  rename(q5=`5%`, q95=`95%`) %>% 
+  mutate(q50 = propRmean) %>% 
+  mutate(
+    across(
+      starts_with("q"),
+      ~ round(100 * .)
+    )
+  )
+
+# Generate table -----
+proptbl <- ptableLR(propL, propR)
+proptbl
+
+# Save for external use -----
+if(params$figsave){
+  gtsave(proptbl, "FIGURES/Propensity_Profile.png", expand = c(10, 10, 10, 10))
+}
+```
+
+```{r}
+#| label: compute-propensity-details
+#| include: false
+#| cache: false
+
+# Loop over surgeries -----
+tall <- list()
+
+# Build detail tables -----
+kk <- 0
+for (s in surglist) {
+  kk <- kk + 1
+  mod <- get(glue("mod_{s}"))
+  res <- prop_shap_table(df=dat, sname=s, mod, x=xpt, varlabs)
+  tall[[kk]] <- res
+}
+names(tall) <- surglist
+```
+
+```{r}
+#| label: format-propensity-details
+#| cache: false
+
+ptprops <- bind_rows(propL, propR)
+
+# Format detail tables -----
+tLR <- list()
+kk <- 0
+for (s in surglist) {
+  kk <- kk + 1
+  tLR[[kk]] <- fmt_shapLR(tall, ptprops, s)
+}
+names(tLR) <- surglist
+```
+
+### Clinical Reasoning
+
+Clinical factors underlying the historical practice standard, arranged from largest positive contributor ([**indications**]{style="color: #005600"}) to largest negative contributor ([**counter-indications**]{style="color: #841859"}). The top row shows the median (5%, 95%) propensity, color coded from [**high propensity**]{style="color: #005600"} to [**low propensity**]{style="color: #841859"}. The range in propensities accounts for measurement error in the physical examination and three-dimensional gait data. <br> <br>
+
+::: {.panel-tabset .nav-pills group="treatment"}
+```{r}
+#| label: display-propensity-details
+#| results: asis
+
+for (kk in 1:length(tLR)) {
+  cat("####", str_replace_all(surglist[kk], "_", " "), "\n\n")
+  print(tLR[[kk]])
+  cat("\n\n")
+  
+  # Save for external use -----
+  if(params$figsave){
+    gtsave(tLR[[kk]], glue("FIGURES/Clin_Reasoning_{surglist[kk]}.png"), expand = c(10, 40, 10, 00))
+  }
+}
+```
+:::
+
+### Outcome Predictions
+
+Plots show [*Change Scores*]{.underline} for scale variables and [*Distributions*]{.underline} for categorical variables. Matched [**Treated**]{style="color: #005600"} limbs underwent the surgery while [**Control**]{style="color: #841859"} limbs did not.
+
+The mean (point), 50% prediction interval (thick line), and 90% prediction interval (thin line) are shown, along with outcomes of individual matches (tick marks). The effect of the **isolated** treatment on the given outcome measure is described using Cohen's D and conventional thresholds.<br>
+
+```{r}
+#| label: build-all-outcome-models
+#| eval: false
+
+# This is the initial code to build the outcome prediction models -----
+# Builds models for all default outcomes - Need to update with a  "master list"
+# Should run this if models or test data change. Default is eval: FALSE
+
+source("SCRIPTS/build_pred_outcome_BART.R")
+
+# Get all outcome variables -----
+v <- vector()
+for (ss in surglist) {
+  v <- c(v, get_outcome_vars(ss))
+}
+v <- unique(v)
+
+# Compute Models -----
+bartlist <- v %>% map(\(v) build_pred_outcome_BART(dat, v), .progress = TRUE)
+names(bartlist) <- v
+
+# Save bartlist into data
+saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
+```
+
+```{r}
+#| label: add-outcome-models-if-needed
+#| eval: true
+
+# This code chunk checks if a new outcome model is needed -----
+# New outcome models can also be added manually
+#   (1) Add predictors to SCRIPTS/get_pred_vars.R
+#   (2) Adust vadd below to include new outcome name(s) 
+#   (3) Run this chunk of code
+#   (4) This can also be used to *update* an outcome model
+
+source("SCRIPTS/build_pred_outcome_BART.R")
+bartlist <- readRDS("DATA/outcome_models_bartlist.RDS")
+
+# Check chosen outcomes -----
+v <- 
+  outcome_setup %>%
+  filter(surg == s) %>%
+  arrange(name) %>%
+  pull(value)
+
+# Add (top) automatically or (bottom) manually
+vadd <- v[!(v %in% names(bartlist))]
+# vadd <- c("avgwb", "avgnwb", "meanswi_Foo_Ang_Trn")
+
+# Fit and Save Models -----
+if(length(vadd) > 0){
+  temp <- vadd %>% map(\(v) build_pred_outcome_BART(dat, v), .progress = TRUE)
+  names(temp) <- vadd
+  bartlist <- c(bartlist, temp)
+  saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
+}
+```
+
+```{r}
+#| label: predict-outcome-for-patient
+#| cache: false
+
+# Find variables needed for BART models, and add NA for missing variables -----
+# This is for kids without gait data
+for (v in names(bartlist)) {
+  vmod <- names(bartlist[[v]]$mod$X)
+  vx <- names(xpt)
+  vadd <- vmod[!(vmod %in% vx)]
+  xpt[vadd] <- NA
+}
+
+# Predict outcomes all surgery x all variables -----
+out_all <-
+  surglist %>% 
+  map(\(s) pred_outcome_by_bart(xx=xpt, surglist, s, bartlist, vlabs))
+names(out_all) <- surglist
+
+temp <- list()
+for (ss in surglist) {
+  temp[[ss]] <- out_all[[ss]] %>% list_rbind()
+}
+
+out_all <- 
+  temp %>% 
+  list_rbind()
+```
+
+```{r}
+#| label: build-outcome-plots
+#| cache: false
+
+# Loop over surgeries -----
+p_s <- list()
+jj <- 0
+
+for (s in surglist) {
+  # Make outcome plot for each outcome variable for surgery s -----
+  # v <- get_outcome_vars(s)
+  v <- 
+    outcome_setup %>%
+    filter(surg == s) %>%
+    arrange(name) %>%
+    pull(value)
+  
+  # Option to customize outcome vars (now use DATA/Outcome_Setup_Custom.xlsx) -----
+  # if(s == "Femoral_Derotation_Osteotomy") v <-
+  # c("HIP_EXT_ROT", "meansta_Hip_Ang_Trn", "meansta_Pel_Ang_Sag", "meansta_Foo_Ang_Trn")
+  
+  poutL <- list()
+  poutR <- list()
+  kk <- 0
+  
+  # Get propensity for title color -----
+  pvalL <- 
+    propL |> 
+    filter(Surgery == str_replace_all(s, "_", " ")) |> 
+    pull(q50)/100
+  pvalR <- 
+    propR |> 
+    filter(Surgery == str_replace_all(s, "_", " ")) |> 
+    pull(q50)/100
+  
+  for (vv in v) {
+    kk <- kk + 1
+    
+    poutL[[kk]] <-
+      outcome_plots_BART(
+        s = s,
+        outvar = vv,
+        xptsd = xL,
+        dref = dat,
+        vlabs = vlabs,
+        neglabs = neglabs,
+        poslabs = poslabs,
+        prop = pvalL,
+        out_all = out_all
+      )
+    poutR[[kk]] <- 
+      outcome_plots_BART(
+        s = s,
+        outvar = vv,
+        xptsd = xR,
+        dref = dat,
+        vlabs = vlabs,
+        neglabs = neglabs,
+        poslabs = poslabs,
+        prop = pvalR,
+        out_all = out_all
+      )
+  }
+  
+  # Assemble outcome plots -----
+  pL <- poutL[[1]] / poutL[[2]] / poutL[[3]] / poutL[[4]] &
+    theme(plot.margin = margin(c(15, 5, 15, 5)))
+  
+  pR <- poutR[[1]] / poutR[[2]] / poutR[[3]] / poutR[[4]] &
+    theme(plot.margin = margin(c(15, 5, 15, 5)))
+  
+  p_s[[s]] <- pL | pR
+} 
+```
+
+::: {.panel-tabset .nav-pills group="treatment"}
+```{r}
+#| label: display-outcome-plots
+#| results: asis
+#| fig-height: 6.5
+
+for (kk in 1:length(p_s)) {
+  cat("####", str_replace_all(names(p_s)[[kk]], "_", " "), "\n\n")
+  print(p_s[[kk]])
+  cat("\n\n")
+}
+```
+:::
+:::
+
+## Supporting Data
+
+::: {#supporting-data .panel-tabset}  
+
+### Physical Examination
+
+Elements of the physical examination are classified using a subjective mild/moderate/severe scale. Cells are filled according to the the magnitude of deviation ([**none**]{style="color: #e2e2e2"}, [**mild**]{style="color: #E5C9CD"}, [**moderate**]{style="color: #E39AA8"}, [**severe**]{style="color: #D65979"}, [**not applicable**]{style="color: #f7e0a1"}). Missing data are left blank.
+
+```{r}
+#| label: build-physical-exam-tables
+#| cache: false
+
+source("SCRIPTS/petbl.R")
+source("SCRIPTS/orthoseverity.R")
+source("SCRIPTS/build_orthotbl.R")
+source("SCRIPTS/build_spatbl.R")
+source("SCRIPTS/build_strseltbl.R")
+source("SCRIPTS/build_foottbl.R")
+
+# Build ortho tables -----
+meas <- c(
+  "HIP_FLEX", "HIP_EXT", "HIP_ABD_0", "HIP_ABD_90", "POP_ANG_UNI", "POP_ANG_BI",
+  "KNEE_EXT", "KNEE_FLEX", "EXTEN_LAG", "PATELLA_ALTA", "ANK_DORS_0", "ANK_DORS_90"
+)
+tblcon <- build_orthotbl(xpt, meas)
+
+meas <- c(
+  "HIP_INT_ROT", "HIP_EXT_ROT", "ANTEVERSION", "EOS_FemTor", 
+  "BIMAL", "SEC_TOE", "EOS_Bimal"
+)
+tbltor <- build_orthotbl(xpt, meas)
+
+# Build neuro tables -----
+tblstrsel <- build_strseltbl(xpt)
+
+meas <- c(
+  "HIP_FLEX_SPAS", "ADDUCTOR_SPAS","HAMSTRING_SPAS", "RECT_FEM_SPAS",  
+  "PLANTFLEX_SPAS", "POST_TIB_SPAS", "ANKLE_CLONUS"
+)
+tblspa <- build_spatbl(xpt, meas)
+
+# Build foot tables -----
+meas <- str_subset(names(xpt), "^WB")
+tblwb <- build_foottbl(xpt, meas)
+
+meas <- str_subset(names(xpt), "^NWB")
+tblnwb <- build_foottbl(xpt, meas)
+```
+
+::: {.panel-tabset .nav-pills}
+```{r}
+#| label: display-physical-exam-tables
+#| results: asis
+
+temp <- c(
+  "Torsion", "Contracture", "Motor Control & Strength", "Spasticity",
+  "Weight-Bearing Foot", "Non-Weight-Bearing Foot")
+pe <- list(tbltor, tblcon, tblstrsel, tblspa, tblwb, tblnwb)
+
+for (kk in 1:length(temp)) {
+  cat("####", temp[kk], "\n\n")
+  print(pe[[kk]])
+  cat("\n\n")
+  
+  # Save for external use -----
+  if(params$figsave){
+    xpnd <- ifelse(temp[kk]=="Motor Control & Strength", 40, 10)
+    gtsave(pe[[kk]], glue("FIGURES/PE_{temp[kk]}.png"), expand = c(10, xpnd, 10, 10))
+  }
+}
+```
+:::
+
+### Kinematics
+
+Current and previous kinematics, which play a significant role in propensity scores and matching-based outcome estimates.
+
+```{r}
+#| label: build-kinematic-plots
+#| cache: false
+#| eval: !expr plotgait
+
+source("SCRIPTS/plot_patient_knm.R")
+p_kinem_curr <- plot_patient_knm(datc3d, xpt, ptname, ptdate, ptmrn) 
+
+source("SCRIPTS/plot_patient_knm_history.R")
+p_kinem_hxL <- plot_patient_knm_history(datc3d, fd, xpt, "L", ptname, ptdate, ptmrn)
+p_kinem_hxR <- plot_patient_knm_history(datc3d, fd, xpt, "R", ptname, ptdate, ptmrn)
+
+```
+
+::: {.panel-tabset .nav-pills}
+```{r}
+#| label: display-kinematic-plots
+#| results: asis
+#| eval: !expr plotgait
+#| fig-height: 6.5
+
+plist <- list()
+plist[[1]] <- p_kinem_curr
+plist[[2]] <- p_kinem_hxL
+plist[[3]] <- p_kinem_hxR
+
+temp <- c("Current", "History Left", "History Right")
+
+for (kk in 1:length(temp)) {
+  cat("####", temp[kk], "\n\n")
+  print(plist[[kk]])
+  cat("\n\n")
+}
+```
+:::
+
+### Development
+
+The plots below show the average development of various measurements with age. It is important to keep in mind that many of these exhibit substantial uncertainty (e.g., $\approx\pm 30^\circ$ for Trochanteric Prominence Angle). This uncertainty is not shown.
+
+```{r}
+#| label: get-development-data
+#| cache: false
+
+# devdat <- readxl::read_xlsx("DATA/growth_curves.xlsx")
+dd <- readxl::read_xlsx("DATA/development_curves.xlsx")
+
+devdat <- 
+  dd |> 
+  pivot_longer(-c(vbl, sex, age), names_to = c("pct")) |> 
+  mutate(name = vlabs[vbl])
+
+```
+
+::: {.panel-tabset .nav-pills}
+#### Height & Weight
+
+```{r}
+#| label: display-ht-wt
+#| fig-height: 3.5
+
+# Compute leg length diff
+source("SCRIPTS/get_LLD.R")
+dat <- get_LLD(dat, "LEG_LENGTH", "LLD")
+dat <- get_LLD(dat, "EOS_LegLength", "EOS_LLD")
+fd$FD <- get_LLD(fd$FD, "LEG_LENGTH", "LLD")
+fd$FD <- get_LLD(fd$FD, "EOS_LegLength", "EOS_LLD")
+
+v <- c("WEIGHT", "HEIGHT", "LLD", "EOS_LLD")
+cap = "Weight in Kg, Height/Leg Length in cm"
+p <- plot_development(fd, dat, v, v, cap, devdat)
+p
+```
+
+#### Femoral Anteversion & Tibial Torsion
+
+```{r}
+#| label: display-av-tt
+#| fig-height: 3.5
+
+v <- c("ANTEVERSION", "EOS_FemTor", "BIMAL", "EOS_Bimal")
+cap = "All angles in degrees"
+p <- plot_development(fd, dat, v, v, cap, devdat)
+p
+```
+
+#### Motor Control, Mobility, and Gait
+
+```{r}
+#| label: display-gdi-dmc-faqt
+#| fig-height: 3.5
+
+v <- c("DMC_L", "DMC_R", "FAQT", "GDI_L", "GDI_R")
+vv <- c("DMC", "FAQT", "GDI")
+cap = "Dimensionless"
+p <- plot_development(fd, dat, v, vv, cap, devdat)
+p
+```
+
+#### Crouch
+
+```{r}
+#| label: display-crouch
+#| fig-height: 3.5
+
+v <- c("KNEE_EXT", "minsta_Kne_Ang_Sag")
+cap = "Degrees"
+p <- plot_development(fd, dat, v, v, cap, devdat)
+p
+```
+:::
+:::
+
+```{r}
+#| label: build-afo-kinematic-plots
+#| cache: false
+
+# Check for AFO trials -----
+pLafo <- NULL
+pRafo <- NULL
+
+if(!is.null(datc3d_afo)){
+  temp <- 
+    datc3d_afo$Ang_avg |> 
+    list_rbind() |> 
+    filter(
+      Exam_ID == xpt$Exam_ID[1]
+    )
+  
+  if(nrow(temp) > 0){
+    source("SCRIPTS/plot_patient_knmafo.R")
+    pLafo <- plot_patient_knmafo(datc3d, datc3d_afo, xpt, "L", ptname, ptdate, ptmrn)
+    pRafo <- plot_patient_knmafo(datc3d, datc3d_afo, xpt, "R", ptname, ptdate, ptmrn)
+  } else {
+    pLafo <- NULL
+    pRafo <- NULL
+  }
+}
+
+```
+
+```{r}
+#| results: asis
+
+cat("## Other Conditions \n\n") 
+cat("This will typically be barefoot vs. orthoses but may include other comparisons. \n\n")
+
+```
+
+::: {.panel-tabset .nav-pills}
+```{r}
+#| label: display-afo-kinematic-plots
+#| results: asis
+#| eval: !expr "!is.null(pLafo)"
+#| fig-height: 6.5
+
+plist <- list()
+plist[[1]] <- pLafo
+plist[[2]] <- pRafo
+
+temp <- c("Left", "Right")
+
+for (kk in 1:length(temp)) {
+  cat("###", temp[kk], "\n\n")
+  print(plist[[kk]])
+  cat("\n\n")
+}
+```
+:::
