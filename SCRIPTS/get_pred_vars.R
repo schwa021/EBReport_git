@@ -8,11 +8,16 @@ get_pred_vars <- function(v){
         "EOS_FemTor", "EOS_Bimal",
         "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", "meansta_Foo_Ang_Trn")
   
+  if(v == "FemTor") pred_vars <- 
+      c("HIP_INT_ROT", "HIP_EXT_ROT", "FemTor", "BIMAL",
+        "EOS_FemTor", "EOS_Bimal",
+        "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", "meansta_Foo_Ang_Trn")
+  
   if(v == "HIP_EXT_ROT") pred_vars <- 
       c("HIP_INT_ROT", "HIP_EXT_ROT", "ANTEVERSION", "BIMAL",
         "EOS_FemTor", "EOS_Bimal",
         "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", "meansta_Foo_Ang_Trn")
-
+  
   if(v == "HIP_INT_ROT") pred_vars <- 
       c("HIP_INT_ROT", "HIP_EXT_ROT", "ANTEVERSION", "BIMAL",
         "EOS_FemTor", "EOS_Bimal",
@@ -186,45 +191,32 @@ get_pred_vars <- function(v){
       )  
   
   # Anteversion and Related Measures -----
-  if(v == "TOTAL_Score") pred_vars <- 
-      c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility", "Gait_Func_Mobility", 
-        "Gait_Pattern_Appearance", "Image_Esteem", "Pain_Discomfort_Fatigue",
-        "GDI", "FAQT")
-  
-  if(v == "Activities_Sports_Rec") pred_vars <- 
-      c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility", "Gait_Func_Mobility", 
-        "Gait_Pattern_Appearance", "Image_Esteem", "Pain_Discomfort_Fatigue",
-        "GDI", "FAQT")
-  
-  if(v == "ADL_Indep") pred_vars <- 
-      c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility", "Gait_Func_Mobility", 
-        "Gait_Pattern_Appearance", "Image_Esteem", "Pain_Discomfort_Fatigue",
-        "GDI", "FAQT")
-  
-  if(v == "Braces_Mobility") pred_vars <- 
-      c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility", "Gait_Func_Mobility", 
-        "Gait_Pattern_Appearance", "Image_Esteem", "Pain_Discomfort_Fatigue",
-        "GDI", "FAQT")
-  
-  if(v == "Gait_Func_Mobility") pred_vars <- 
-      c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility", "Gait_Func_Mobility", 
-        "Gait_Pattern_Appearance", "Image_Esteem", "Pain_Discomfort_Fatigue",
-        "GDI", "FAQT")
-  
-  if(v == "Gait_Pattern_Appearance") pred_vars <- 
-      c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility", "Gait_Func_Mobility", 
-        "Gait_Pattern_Appearance", "Image_Esteem", "Pain_Discomfort_Fatigue",
-        "GDI", "FAQT")
-  
-  if(v == "Image_Esteem") pred_vars <- 
-      c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility", "Gait_Func_Mobility", 
-        "Gait_Pattern_Appearance", "Image_Esteem", "Pain_Discomfort_Fatigue",
-        "GDI", "FAQT")
-  
-  if(v == "Pain_Discomfort_Fatigue") pred_vars <- 
-      c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility", "Gait_Func_Mobility", 
-        "Gait_Pattern_Appearance", "Image_Esteem", "Pain_Discomfort_Fatigue",
-        "GDI", "FAQT")
+  vgoals <- c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility",
+              "Gait_Func_Mobility", "Gait_Pattern_Appearance", "Image_Esteem", 
+              "Pain_Discomfort_Fatigue")
+
+  if(v %in% vgoals) pred_vars <- 
+      c(vgoals, 
+        
+        "GDI", "FAQT", "DMC", "avgspa", "avgstr", "avgsel", 
+        "avgwb", "avgnwb",
+        "HIP_INT_ROT", "HIP_EXT_ROT", "ANTEVERSION", "EOS_FemTor", "BIMAL", "EOS_Bimal",
+        "HIP_EXT", "POP_ANG_UNI",
+        "KNEE_EXT", "EXTEN_LAG", "PATELLA_ALTA",
+        "ANK_DORS_0", "ANK_DORS_90",
+        
+        "ic_Pel_Ang_Sag", "midsta_Pel_Ang_Sag", "ofc_Pel_Ang_Sag", "fo_Pel_Ang_Sag", "midswi_Pel_Ang_Sag",
+        "ic_Hip_Ang_Sag", "midsta_Hip_Ang_Sag", "ofc_Hip_Ang_Sag", "fo_Hip_Ang_Sag", "midswi_Hip_Ang_Sag",
+        "ic_Kne_Ang_Sag", "midsta_Kne_Ang_Sag", "ofc_Kne_Ang_Sag", "fo_Kne_Ang_Sag", "midswi_Kne_Ang_Sag",
+        "ic_Ank_Ang_Sag", "midsta_Ank_Ang_Sag", "ofc_Ank_Ang_Sag", "fo_Ank_Ang_Sag", "midswi_Ank_Ang_Sag",
+        
+        "ic_Pel_Ang_Cor", "midsta_Pel_Ang_Cor", "ofc_Pel_Ang_Cor", "fo_Pel_Ang_Cor", "midswi_Pel_Ang_Cor",
+        "ic_Hip_Ang_Cor", "midsta_Hip_Ang_Cor", "ofc_Hip_Ang_Cor", "fo_Hip_Ang_Cor", "midswi_Hip_Ang_Cor",
+        
+        "ic_Pel_Ang_Trn", "midsta_Pel_Ang_Trn", "ofc_Pel_Ang_Trn", "fo_Pel_Ang_Trn", "midswi_Pel_Ang_Trn",
+        "ic_Hip_Ang_Trn", "midsta_Hip_Ang_Trn", "ofc_Hip_Ang_Trn", "fo_Hip_Ang_Trn", "midswi_Hip_Ang_Trn",
+        "ic_Foo_Ang_Trn", "midsta_Foo_Ang_Trn", "ofc_Foo_Ang_Trn", "fo_Foo_Ang_Trn", "midswi_Foo_Ang_Trn"
+      )
   
   return(pred_vars)
 }

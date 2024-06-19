@@ -16,20 +16,18 @@ add_stats <- function(FD, datc3d){
   
   # Organize stats data
   angstats <- widestats(datc3d$Ang_stats, "") 
-  momstats <- widestats(datc3d$Mom_stats, "")
-  pwrstats <- widestats(datc3d$Pwr_stats, "")
-  # rxnstats <- widestats(datc3d$Rxn_stats, "")
-  lenstats <- widestats(datc3d$Len_stats, "len")
-  velstats <- widestats(datc3d$Vel_stats, "vel")
+  if(!is.null(datc3d$Mom_stats))  momstats <- widestats(datc3d$Mom_stats, "")
+  if(!is.null(datc3d$Pwr_stats))  pwrstats <- widestats(datc3d$Pwr_stats, "")
+  if(!is.null(datc3d$Rxn_stats))  rxnstats <- widestats(datc3d$Rxn_stats, "")
+  if(!is.null(datc3d$Len_stats))  lenstats <- widestats(datc3d$Len_stats, "len")
+  if(!is.null(datc3d$Vel_stats))  velstats <- widestats(datc3d$Vel_stats, "vel")
   
-  FD <- 
-    FD %>% 
-    left_join(angstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID")) %>% 
-    left_join(momstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID")) %>%
-    left_join(pwrstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID")) %>%
-    # left_join(rxnstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID")) |> 
-    left_join(lenstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID")) %>% 
-    left_join(velstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID"))
+  FD <- left_join(FD, angstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID")) 
+  if(!is.null(datc3d$Mom_stats))  FD <- left_join(FD, momstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID"))
+  if(!is.null(datc3d$Pwr_stats))  FD <- left_join(FD, pwrstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID"))
+  if(!is.null(datc3d$Rxn_stats))  FD <- left_join(FD, rxnstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID"))
+  if(!is.null(datc3d$Len_stats))  FD <- left_join(FD, lenstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID"))
+  if(!is.null(datc3d$Vel_stats))  FD <- left_join(FD, velstats, by = c("SIDE" = "side", "Exam_ID" = "Exam_ID"))
   
   return(FD)
 }

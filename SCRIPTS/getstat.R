@@ -3,6 +3,7 @@
 getstat <- function(D, ix, stat, statname){
   # Apply statistic (e.g., mean) across all columns
   temp <- sapply(D[ix,], match.fun(stat))
+  temp <- lapply(temp, function(x) ifelse(length(x)==0, NA, x))
   temp <- unlist(temp)
   
   # Organize as tibble

@@ -37,7 +37,10 @@ read_and_organize <- function(dd) {
         dx = fct_lump_min(min = 50, dx)
       ) %>%
       ## Choose EOS or PE for Anteversion and Tibial Torsion
-      mutate(FemTor = ifelse(!is.na(EOS_FemTor), EOS_FemTor, ANTEVERSION)) %>% 
+      mutate(
+        FemTor = ifelse(!is.na(EOS_FemTor), EOS_FemTor, ANTEVERSION),
+        FemTorPost = ifelse(!is.na(EOS_FemTorPost), EOS_FemTorPost, ANTEVERSIONPost)
+        ) %>% 
       ## Recode FDO_DFEO --> FDO and DFEO
       mutate(
         prior_Femoral_Derotation_Osteotomy = prior_Femoral_Derotation_Osteotomy + prior_FDO_DFEO,

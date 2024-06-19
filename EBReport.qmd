@@ -38,11 +38,11 @@ execute:
   error: false
     
 params:
-  MRN: 490219
-  Event_Date: "2021-10-12"
-  deid: FALSE
+  MRN: 161985
+  Event_Date: "2004-07-02"
+  deid: TRUE
   usegait: TRUE
-  figsave: FALSE
+  figsave: TRUE
 ---
 
 ```{r}
@@ -104,6 +104,7 @@ source("SCRIPTS/get_meanscores.R")
 source("SCRIPTS/pred_outcome_by_bart.R")
 source("SCRIPTS/outcome_plots_BART.R")
 source("SCRIPTS/get_pred_vars.R")
+source("SCRIPTS/get_O2_Z.R")
 
 # Theme for ggplot2 -----
 theme_mhs <- theme_minimal(base_size = 7) 
@@ -160,22 +161,25 @@ outcome_setup <-
 #| include: false
 
 # Get clinical data from RRFMP output -----
-if(file.exists("DATA/preprocessed_data_2024-05-25.RDS")){
+if(file.exists("DATA/preprocessed_data_current.RDS")){
   dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
-  dat <- readRDS("DATA/preprocessed_data_2024-05-25.RDS")
+  dat <- readRDS("DATA/preprocessed_data_current.RDS")
   dat <- get_meanscores(dat, "Pre")
   dat <- get_meanscores(dat, "Post")
+  dat <- get_O2_Z(dat)
 } else {
   dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
   dat <- read_and_organize(dat0)
   dat <- get_meanscores(dat, "Pre")
   dat <- get_meanscores(dat, "Post")
+  dat <- get_O2_Z(dat)
 }
 
 # Get all pre- data (used in GOAL table, etc...) -----
 datpre <- readRDS("DATA/FD_2024-05-25.RDS")
 datpre <- read_and_organize(datpre)
 datpre <- get_meanscores(datpre, "Pre")
+datpre <- get_O2_Z(datpre)
 ```
 
 ```{r}
@@ -254,10 +258,12 @@ fd$FD <-
   fd$FD %>% 
   filter(Event_Date <= params$Event_Date)
 
-fd$FDPP <- 
-  fd$FDpp %>% 
-  filter(Event_Date <= params$Event_Date)
-  
+if(!is.null(fd$FDpp)){
+  fd$FDPP <- 
+    fd$FDpp %>% 
+    filter(Event_Date <= params$Event_Date)
+}
+
 
 # Add NA for missing variables - this is for limbs without gait data -----
 if(params$usegait == FALSE){
@@ -403,7 +409,7 @@ t_goal <- build_goaltbl(xpt, datpre)
 if(!is.null(t_goal)) t_goal
 
 # Save for external use -----
-if(params$figsave){
+if(params$figsave & !is.null(t_goal)){
   gtsave(t_goal, "FIGURES/GOAL_Summary.png")
 }
 ```
@@ -427,7 +433,7 @@ t_imp <- build_importanttbl(goal, params)
 if(!is.null(t_imp)) t_imp
 
 # Save for external use -----
-if(params$figsave){
+if(params$figsave & !is.null(t_imp)){
   gtsave(t_imp, "FIGURES/GOAL_Importance.png", expand = c(0, 40, 50, 0))
 }
 ```

@@ -64,7 +64,7 @@ get_prop_model_vars <- function(s){
   # Spasticity -----
   if(s == "Neural_Rhizotomy") prop_vars <- 
       c("PLANTFLEX_SPAS", "HAMSTRING_SPAS", "RECT_FEM_SPAS", "ADDUCTOR_SPAS",
-        "GMFCS",
+        "GMFCS", "NETND_OXYCONS_PCT",
         "ic_Ank_Ang_Sag", "maxsta_Ank_Ang_Sag", "meanswi_Ank_Ang_Sag",
         "ic_Kne_Ang_Sag",
         "prior_Neural_Rhizotomy")
