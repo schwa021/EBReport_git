@@ -35,7 +35,8 @@ add_interval_details <- function(FDpp, surg){
         )
       if (nrow(s) == 2) temp[kk:(kk + 1),] <- s
     }
- 
+    
+    temp <- select(temp, -matches("_ID|Event_Date"))
     FDpp <- bind_cols(FDpp, temp)
   }
   

@@ -3,7 +3,6 @@ title: "EB GAIT"
 subtitle: "Evidence Based Gait Analysis Interpretation Technique"
 Author: ""
 Date: ""
-
 format:
   html:
     toc: true
@@ -15,12 +14,11 @@ format:
     theme:
       - cosmo
     grid:
+      
       body-width: 1050px
       sidebar-width: 250px
       margin-width: 0px
-      
 lightbox: true
-
 knitr:
   opts_chunk:
     warning: false
@@ -28,7 +26,6 @@ knitr:
     cache.lazy: false
     screenshot.force: true
     fig.path: FIGURES/
-
 html-table-processing: none
     
 execute:
@@ -38,11 +35,14 @@ execute:
   error: false
     
 params:
-  MRN: 161985
-  Event_Date: "2004-07-02"
+  MRN: 606085
+  Event_Date: "2018-06-21"
   deid: TRUE
+  usevideo: TRUE
   usegait: TRUE
   figsave: TRUE
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r}
@@ -192,6 +192,8 @@ surglist <- c("Femoral_Derotation_Osteotomy", "Tibial_Derotation_Osteotomy", "Ps
 # Loop over list -----
 for (s in surglist) {
   if(file.exists(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))){
+    # Comment above ^^^ and Uncomment below vvv to re-run all propensity models
+    # if(FALSE){
     # Load model
     load(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))
     assign(glue("mod_{s}"), slist[[1]])
@@ -444,9 +446,24 @@ if(params$figsave & !is.null(t_imp)){
 
 ```{r}
 #| label: get-video
-#| eval: !expr getvids
+#| eval: params$usevideo
 #| include: false
 #| cache: false
+
+compfun <- function(temp, vidlist, vidlabs){
+  # Remove old
+  unlink(temp)
+  
+  # Compress all videos
+  vidname <- vector()
+  for (kk in 1:length(vidlist)) {
+    curr.vid <- vidfile[kk]
+    vidname[kk] <- glue("{vidlabs[[kk]]}.mp4")
+    ffmpeg_command <-
+      paste("ffmpeg -i", curr.vid, "-c:v libx264 -crf 30", vidname[kk])
+    system(ffmpeg_command)
+  }  
+}
 
 # List of all videos -----
 temp <- fd$FD %>% arrange(rev(age))
@@ -462,27 +479,15 @@ vidfile <- temp %>% filter(SIDE == "L") %>% pull(Video_File)
 # Remove existing local videos and compress new -----
 temp <- list.files(pattern = ".mp4$")
 
-if(!(all(vidlist %in% temp))){
-  # Remove old
-  unlink(temp)
-  
-  # Compress all videos
-  vidname <- vector()
-  for (kk in 1:length(vidlist)) {
-    
-    curr.vid <- vidfile[kk]
-    vidname[kk] <- glue("{vidlabs[[kk]]}.mp4")
-    
-    ffmpeg_command <-
-      paste(
-        "ffmpeg -i",
-        curr.vid,
-        "-c:v libx264 -crf 30",
-        vidname[kk]
-      )
-    
-    system(ffmpeg_command)
-  }
+# Use Deidentified video if appropriate -----
+if(params$deid & params$usevideo){
+  res <- str_extract(vidfile, "[^\\\\]+$")
+  vidfile <- glue("VIDEO/{params$MRN}/{res}")
+  compfun(temp, vidlist, vidlabs)
+}
+
+if(!params$deid & !(all(vidlist %in% temp))){
+  compfun(temp, vidlist, vidlabs)
 } else {
   vidname <- vidlist
 }
@@ -490,7 +495,7 @@ if(!(all(vidlist %in% temp))){
 
 ```{r}
 #| label: show-video
-#| eval: !expr getvids
+#| eval: params$usevideo
 #| results: asis
 #| panel: tabset
 

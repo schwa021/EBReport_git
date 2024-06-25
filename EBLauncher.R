@@ -8,6 +8,7 @@ ui <- fluidPage(
   textInput("MRN", "MRN", "606085"),
   textInput("Event_Date", "Event Date", "2018-06-21"),
   checkboxInput("deid", "Deidentify?", value = FALSE),
+  checkboxInput("usevideo", "Include Video?", value = TRUE),
   checkboxInput("figsave", "Save Figures?", value = FALSE),
   checkboxInput("usegait", "Use Gait Data?", value = TRUE),
   
@@ -24,6 +25,7 @@ server <- function(input, output, session) {
       MRN = input$MRN,
       Event_Date = input$Event_Date,
       deid = input$deid,
+      usevideo = input$usevideo,
       figsave = input$figsave,
       usegait = input$usegait
     )

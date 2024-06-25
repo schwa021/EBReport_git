@@ -11,6 +11,7 @@ outcome_plots_BART <-
       cut(
         prop, 
         breaks = c(-Inf, .2, .4, .6, .8, Inf),
+        right = F,
         labels = c("Unlikely", "Somewhat Unlikely", "Neither", "Somewhat Likely", "Likely")
       )
     pcol <- palborder[as.numeric(pcat)]

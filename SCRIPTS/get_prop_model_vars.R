@@ -90,7 +90,7 @@ get_prop_model_vars <- function(s){
         "meansta_Foo_Ang_Trn", "meanswi_Foo_Ang_Trn",
         "prior_Foot_and_Ankle_Bone", "prior_Foot_and_Ankle_Soft_Tissue")
   
-  prop_vars <- c("age", "affected", "dx", "dxmod", "era", prop_vars)
+  prop_vars <- c("age", "affected", "dx", "era", prop_vars)
   
   return(prop_vars)
   
