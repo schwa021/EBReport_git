@@ -35,10 +35,10 @@ execute:
   error: false
     
 params:
-  MRN: 606085
-  Event_Date: "2018-06-21"
+  MRN: 493097
+  Event_Date: "2019-05-09"
   deid: TRUE
-  usevideo: TRUE
+  usevideo: FALSE
   usegait: TRUE
   figsave: TRUE
 editor_options: 
@@ -532,7 +532,6 @@ xpt[vadd] <- NA
 post <- list()
 for (s in surglist) {
   mod <- get(glue("mod_{s}"))
-  
   set.seed(42)
   xpt[glue("p_{s}")] <- predict(mod, xpt[names(mod$X)])
   post[[s]] <- bart_machine_get_posterior(mod, xpt[names(mod$X)])
@@ -546,47 +545,10 @@ xR <- xpt |> filter(SIDE == "R")
 #| label: display-profile
 #| cache: false
 
-# Compute propensity as mean of posterior -----
-propLmean <- 
-  surglist %>% 
-  map(\(ss) mean(post[[ss]]$y_hat_posterior_samples[1,])) %>% 
-  unlist()
+source("SCRIPTS/get_prop.R")
 
-propRmean <- 
-  surglist %>% 
-  map(\(ss) mean(post[[ss]]$y_hat_posterior_samples[2,])) %>% 
-  unlist()
-
-# Compute 5th and 95th and organize. Note "q50" is mean, not median! -----
-propL <- 
-  surglist %>% 
-  map_df(\(ss) quantile(post[[ss]]$y_hat_posterior_samples[1,], probs = c(.05, .95))) %>% 
-  mutate(Surgery = str_replace_all(surglist, "_", " ")) %>% 
-  mutate(SIDE = "L") %>% 
-  rename(q5=`5%`, q95=`95%`) %>% 
-  mutate(q50 = propLmean) %>% 
-  mutate(
-    across(
-      starts_with("q"),
-      ~ round(100 * .)
-    )
-  )
-
-propR <- 
-  surglist %>% 
-  map_df(\(ss) quantile(post[[ss]]$y_hat_posterior_samples[2,], probs = c(.05, .95))) %>% 
-  mutate(Surgery = str_replace_all(surglist, "_", " ")) %>% 
-  mutate(SIDE = "R") %>% 
-  rename(q5=`5%`, q95=`95%`) %>% 
-  mutate(q50 = propRmean) %>% 
-  mutate(
-    across(
-      starts_with("q"),
-      ~ round(100 * .)
-    )
-  )
-
-# Generate table -----
+propL <- get_prop(propLmean, post, surglist, "L")
+propR <- get_prop(propRmean, post, surglist, "R")
 proptbl <- ptableLR(propL, propR)
 proptbl
 
@@ -601,18 +563,13 @@ if(params$figsave){
 #| include: false
 #| cache: false
 
-# Loop over surgeries -----
-tall <- list()
-
 # Build detail tables -----
-kk <- 0
+tall <- list()
 for (s in surglist) {
-  kk <- kk + 1
   mod <- get(glue("mod_{s}"))
   res <- prop_shap_table(df=dat, sname=s, mod, x=xpt, varlabs)
-  tall[[kk]] <- res
+  tall[[s]] <- res
 }
-names(tall) <- surglist
 ```
 
 ```{r}
@@ -620,15 +577,10 @@ names(tall) <- surglist
 #| cache: false
 
 ptprops <- bind_rows(propL, propR)
-
-# Format detail tables -----
 tLR <- list()
-kk <- 0
 for (s in surglist) {
-  kk <- kk + 1
-  tLR[[kk]] <- fmt_shapLR(tall, ptprops, s)
+  tLR[[s]] <- fmt_shapLR(tall, ptprops, s)
 }
-names(tLR) <- surglist
 ```
 
 ### Clinical Reasoning

@@ -6,6 +6,7 @@ get_prop_model_vars <- function(s){
         "FemTor",
         "BIMAL", "EOS_Bimal",
         "WB_4FTPOS", "WB_4FTPOS_SEV", "WB_4FTPOS2", "WB_4FTPOS2_SEV",
+        "maxswi_Kne_Ang_Cor", "minswi_Kne_Ang_Cor",
         "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", "meansta_Foo_Ang_Trn", 
         "prior_Femoral_Derotation_Osteotomy", "prior_Tibial_Derotation_Osteotomy")
   
@@ -14,6 +15,7 @@ get_prop_model_vars <- function(s){
         "FemTor", 
         "BIMAL", "EOS_Bimal",
         "WB_4FTPOS", "WB_4FTPOS_SEV", "WB_4FTPOS2", "WB_4FTPOS2_SEV",
+        "maxswi_Kne_Ang_Cor", "minswi_Kne_Ang_Cor",
         "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", "meansta_Foo_Ang_Trn", 
         "prior_Femoral_Derotation_Osteotomy", "prior_Tibial_Derotation_Osteotomy")
   
