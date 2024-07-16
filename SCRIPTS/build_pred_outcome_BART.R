@@ -16,7 +16,7 @@ build_pred_outcome_BART <- function(dat, vv){
   }
   
   # Get features -----
-  predvars <- get_pred_vars(vv)
+  predvars <- get_pred_model_vars(vv)
   predvars <- c("age", "GMFCS", predvars, glue("interval_{surglist}"))
   predvars <- unique(predvars)
   
@@ -43,7 +43,12 @@ build_pred_outcome_BART <- function(dat, vv){
   testint <- temp$interval
   testval <- rowMeans(temp$all_prediction_samples)
   
+  # Get details
+  temp <- fsplit(dat, itest, c("Exam_ID", "SIDE"), vv)$x
+  
   testperf <- tibble(
+    Exam_ID = temp$Exam_ID,
+    SIDE = temp$SIDE,
     meas = ytest,
     pred = testval,
     lwr = testint[,1],

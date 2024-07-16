@@ -2,7 +2,7 @@
 library(shiny)
 library(quarto)
 
-# Define UI
+# Define UI -----
 ui <- fluidPage(
   # UI elements for parameter input
   textInput("MRN", "MRN", "606085"),
@@ -16,10 +16,10 @@ ui <- fluidPage(
   actionButton("renderBtn", "Render EB GAIT Report")
 )
 
-# Define server
+# Define server -----
 server <- function(input, output, session) {
   
-  # Function to render Quarto document
+  # Function to render Quarto document...
   renderQuarto <- function() {
     params <- list(
       MRN = input$MRN,
@@ -34,19 +34,19 @@ server <- function(input, output, session) {
     quarto_file <- "EBReport.qmd"
     output_file <- glue::glue("EBReport_{params$MRN}_{params$Event_Date}.html")
     
-    # Render Quarto document with parameters
+    # Render Quarto document with parameters...
     quarto::quarto_render(
       quarto_file, 
       execute_params = params, 
       output_file = output_file)
   }
   
-  # Event handler for rendering Quarto document
+  # Event handler for rendering Quarto document...
   observeEvent(input$renderBtn, {
     renderQuarto()
   })
   
 }
 
-# Run the Shiny app
+# Run the Shiny app -----
 shinyApp(ui, server)

@@ -35,12 +35,14 @@ execute:
   error: false
     
 params:
-  MRN: 493097
-  Event_Date: "2019-05-09"
-  deid: TRUE
+  MRN: 606085
+  Event_Date: "2018-06-21"
+  deid: FALSE
   usevideo: FALSE
   usegait: TRUE
-  figsave: TRUE
+  figsave: FALSE
+  custom_outcome: FALSE
+  
 editor_options: 
   chunk_output_type: console
 ---
@@ -103,7 +105,7 @@ source("SCRIPTS/plot_development.R")
 source("SCRIPTS/get_meanscores.R")
 source("SCRIPTS/pred_outcome_by_bart.R")
 source("SCRIPTS/outcome_plots_BART.R")
-source("SCRIPTS/get_pred_vars.R")
+source("SCRIPTS/get_pred_model_vars.R")
 source("SCRIPTS/get_O2_Z.R")
 
 # Theme for ggplot2 -----
@@ -119,9 +121,6 @@ theme_set(theme_mhs(7))
 
 # For trimming white space around figures -----
 knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
-
-# For controlling video extraction -----
-getvids <- !params$deid
 ```
 
 ```{r}
@@ -144,7 +143,11 @@ poslabs <- varlabs$posdir
 names(poslabs) <- varlabs$Variable
 
 # Read outcome setup -----
-outcome_setup <- readxl::read_xlsx("DATA/Outcome_Setup_Custom.xlsx", sheet = "Main")
+if(params$custom_outcome){
+  outcome_setup <- readxl::read_xlsx("DATA/Outcome_Setup_Custom.xlsx", sheet = "Main")
+} else {
+  outcome_setup <- readxl::read_xlsx("DATA/Outcome_Setup_Default.xlsx", sheet = "Main")
+}
 outcome_setup <- 
   outcome_setup %>% 
   mutate(
@@ -228,6 +231,7 @@ if(is.null(dat$p_Femoral_Derotation_Osteotomy)){
     dat[[glue("p_{s}")]] <- predict(mod, dat[names(mod$X)])
   }
   saveRDS(dat, glue("DATA/preprocessed_data_{as.Date(now())}.RDS"))
+  saveRDS(dat, glue("DATA/preprocessed_data_current.RDS"))
 }
 ```
 
@@ -451,10 +455,9 @@ if(params$figsave & !is.null(t_imp)){
 #| cache: false
 
 compfun <- function(temp, vidlist, vidlabs){
-  # Remove old
+  # Remove old.....
   unlink(temp)
-  
-  # Compress all videos
+  # Compress all videos.....
   vidname <- vector()
   for (kk in 1:length(vidlist)) {
     curr.vid <- vidfile[kk]
@@ -488,7 +491,6 @@ if(params$deid & params$usevideo){
 
 if(!params$deid & !(all(vidlist %in% temp))){
   compfun(temp, vidlist, vidlabs)
-} else {
   vidname <- vidlist
 }
 ```
@@ -499,10 +501,10 @@ if(!params$deid & !(all(vidlist %in% temp))){
 #| results: asis
 #| panel: tabset
 
-for (kk in 1:length(vidname)) {
+for (kk in 1:length(vidlist)) {
   cat("\n\n###", str_replace(vidlabs[kk], "_", " + "), "  \n\n")
   cat("\n\n <video width=800 controls>
-  <source src=", vidname[kk], " type=video/mp4>
+  <source src=", vidlist[kk], " type=video/mp4>
   </video> \n\n")
 }
 ```
@@ -697,6 +699,7 @@ for (ss in surglist) {
 out_all <- 
   temp %>% 
   list_rbind()
+
 ```
 
 ```{r}
