@@ -11,6 +11,7 @@ ui <- fluidPage(
   checkboxInput("usevideo", "Include Video?", value = TRUE),
   checkboxInput("figsave", "Save Figures?", value = FALSE),
   checkboxInput("usegait", "Use Gait Data?", value = TRUE),
+  checkboxInput("custom_outcome", "Use Custom Outcome?", value = FALSE),
   
   # Button to trigger Quarto rendering
   actionButton("renderBtn", "Render EB GAIT Report")
@@ -27,7 +28,8 @@ server <- function(input, output, session) {
       deid = input$deid,
       usevideo = input$usevideo,
       figsave = input$figsave,
-      usegait = input$usegait
+      usegait = input$usegait,
+      custom_outcome = input$custom_outcome
     )
     
     # Template

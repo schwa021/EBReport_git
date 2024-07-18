@@ -107,6 +107,7 @@ source("SCRIPTS/pred_outcome_by_bart.R")
 source("SCRIPTS/outcome_plots_BART.R")
 source("SCRIPTS/get_pred_model_vars.R")
 source("SCRIPTS/get_O2_Z.R")
+source("SCRIPTS/get_outcome_thresh.R")
 
 # Theme for ggplot2 -----
 theme_mhs <- theme_minimal(base_size = 7) 
@@ -607,12 +608,6 @@ for (kk in 1:length(tLR)) {
 ```
 :::
 
-### Outcome Predictions
-
-Plots show [*Change Scores*]{.underline} for scale variables and [*Distributions*]{.underline} for categorical variables. Matched [**Treated**]{style="color: #005600"} limbs underwent the surgery while [**Control**]{style="color: #841859"} limbs did not.
-
-The mean (point), 50% prediction interval (thick line), and 90% prediction interval (thin line) are shown, along with outcomes of individual matches (tick marks). The effect of the **isolated** treatment on the given outcome measure is described using Cohen's D and conventional thresholds.<br>
-
 ```{r}
 #| label: build-all-outcome-models
 #| eval: false
@@ -631,11 +626,11 @@ for (ss in surglist) {
 v <- unique(v)
 
 # Compute Models -----
-bartlist <- v %>% map(\(v) build_pred_outcome_BART(dat, v), .progress = TRUE)
-names(bartlist) <- v
+# bartlist <- v %>% map(\(v) build_pred_outcome_BART(dat, v), .progress = TRUE)
+# names(bartlist) <- v
 
 # Save bartlist into data
-saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
+# saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
 ```
 
 ```{r}
@@ -701,6 +696,40 @@ out_all <-
   list_rbind()
 
 ```
+
+```{r}
+#| label: build-outcome-profile
+#| cache: false
+
+source("SCRIPTS/build_outcome_profile.R")
+outcome_profile <- build_outcome_profile(out_all)
+
+```
+
+### Outcome Profile
+
+**EXPERIMENTAL - Please Consult Outcome Details Before Operating**
+
+The outcome profile shows the probability that a treatment effect ($\Delta_{treated}-\Delta_{control}$) will surpass a chosen threshold. The *variables* and *thresholds* are pre-determined by a panel of clinical experts.
+
+Example: Femoral Derotation Osteotomy  
+-   **Structure**: Trochanteric Prominence Angle, $\Delta < -10^\circ$\
+-   **Kinematics**: Mean Stance Hip Angle Transverse Plane $\Delta < -5^\circ$\
+
+::: {.panel-tabset .nav-pills}
+```{r}
+#| label: display-outcome-profile
+#| results: asis
+
+for (kk in 1:length(outcome_profile)) {
+  sdstr <- ifelse(kk==1, "Left", "Right")
+  cat("####", sdstr, "\n\n")
+  print(outcome_profile[[kk]])
+  cat("\n\n")
+}
+
+```
+:::
 
 ```{r}
 #| label: build-outcome-plots
@@ -776,6 +805,12 @@ for (s in surglist) {
   p_s[[s]] <- pL | pR
 } 
 ```
+
+### Outcome Details
+
+Plots show [*Change Scores*]{.underline} for scale variables and [*Distributions*]{.underline} for categorical variables. Matched [**Treated**]{style="color: #005600"} limbs underwent the surgery while [**Control**]{style="color: #841859"} limbs did not.
+
+The mean (point), 50% prediction interval (thick line), and 90% prediction interval (thin line) are shown, along with outcomes of individual matches (tick marks). The effect of the **isolated** treatment on the given outcome measure is described using Cohen's D and conventional thresholds.<br> 
 
 ::: {.panel-tabset .nav-pills group="treatment"}
 ```{r}
