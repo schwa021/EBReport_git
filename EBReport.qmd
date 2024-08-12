@@ -35,8 +35,10 @@ execute:
   error: false
     
 params:
-  MRN: 606085
-  Event_Date: "2018-06-21"
+  # MRN: 606085
+  MRN: 616061
+  # Event_Date: "2018-06-21"
+  Event_Date: "2024-07-11"
   deid: FALSE
   usevideo: FALSE
   usegait: TRUE
@@ -191,7 +193,7 @@ datpre <- get_O2_Z(datpre)
 #| include: false
 
 # List of surgeries -----
-surglist <- c("Femoral_Derotation_Osteotomy", "Tibial_Derotation_Osteotomy", "Psoas_Release", "Hams_Lengthening", "Adductor_Release", "Gastroc_Soleus_Lengthening", "DFEO_Patellar_Advance", "Patellar_Advance",  "Foot_and_Ankle_Bone", "Foot_and_Ankle_Soft_Tissue","Neural_Rhizotomy", "Rectus_Transfer")
+surglist <- c("Femoral_Derotation_Osteotomy", "Tibial_Derotation_Osteotomy", "Psoas_Release", "Hams_Lengthening", "Adductor_Release", "Gastroc_Soleus_Lengthening", "DFEO_Patellar_Advance", "Patellar_Advance", "Foot_and_Ankle_Bone", "Foot_and_Ankle_Soft_Tissue","Neural_Rhizotomy", "Rectus_Transfer")
 
 # Loop over list -----
 for (s in surglist) {
@@ -464,7 +466,7 @@ compfun <- function(temp, vidlist, vidlabs){
     curr.vid <- vidfile[kk]
     vidname[kk] <- glue("{vidlabs[[kk]]}.mp4")
     ffmpeg_command <-
-      paste("ffmpeg -i", curr.vid, "-c:v libx264 -crf 30", vidname[kk])
+      paste("ffmpeg -i", curr.vid, "-c:v libx264 -crf 20", vidname[kk])
     system(ffmpeg_command)
   }  
 }
@@ -515,7 +517,7 @@ for (kk in 1:length(vidlist)) {
 ::: {#treatment-assignment .panel-tabset}
 ### Propensity Profile
 
-The likelihood that the limb would have undergone the indicated surgery based on historical practice standards.  
+The likelihood that the limb would have undergone the indicated surgery based on historical practice standards.
 
 > <center>![](DATA/caution.jpeg){width="2in"}\
 > *Meeting historical standards **does not** ensure a good outcome.\
@@ -616,14 +618,14 @@ for (kk in 1:length(tLR)) {
 # Builds models for all default outcomes - Need to update with a  "master list"
 # Should run this if models or test data change. Default is eval: FALSE
 
-source("SCRIPTS/build_pred_outcome_BART.R")
+# source("SCRIPTS/build_pred_outcome_BART.R")
 
 # Get all outcome variables -----
-v <- vector()
-for (ss in surglist) {
-  v <- c(v, get_outcome_vars(ss))
-}
-v <- unique(v)
+# v <- vector()
+# for (ss in surglist) {
+#   v <- c(v, get_outcome_vars(ss))
+# }
+# v <- unique(v)
 
 # Compute Models -----
 # bartlist <- v %>% map(\(v) build_pred_outcome_BART(dat, v), .progress = TRUE)
@@ -710,11 +712,9 @@ outcome_profile <- build_outcome_profile(out_all)
 
 **EXPERIMENTAL - Please Consult Outcome Details Before Operating**
 
-The outcome profile shows the probability that a treatment effect ($\Delta_{treated}-\Delta_{control}$) will surpass a chosen threshold. The *variables* and *thresholds* are pre-determined by a panel of clinical experts.
+The outcome profile shows the median *treatment effect* for each surgery-outcome combination. Color coding indicates the probability that the treatment effect exceeds clinically meaningful threshold chosen by a panel of experts.  
 
-Example: Femoral Derotation Osteotomy  
--   **Structure**: Trochanteric Prominence Angle, $\Delta < -10^\circ$\
--   **Kinematics**: Mean Stance Hip Angle Transverse Plane $\Delta < -5^\circ$\
+**Treatment Effect = &Delta;~Treated~ - &Delta;~Control~**  
 
 ::: {.panel-tabset .nav-pills}
 ```{r}
@@ -810,7 +810,7 @@ for (s in surglist) {
 
 Plots show [*Change Scores*]{.underline} for scale variables and [*Distributions*]{.underline} for categorical variables. Matched [**Treated**]{style="color: #005600"} limbs underwent the surgery while [**Control**]{style="color: #841859"} limbs did not.
 
-The mean (point), 50% prediction interval (thick line), and 90% prediction interval (thin line) are shown, along with outcomes of individual matches (tick marks). The effect of the **isolated** treatment on the given outcome measure is described using Cohen's D and conventional thresholds.<br> 
+The mean (point), 50% prediction interval (thick line), and 90% prediction interval (thin line) are shown, along with outcomes of individual matches (tick marks). The effect of the **isolated** treatment on the given outcome measure is described using Cohen's D and conventional thresholds.<br>
 
 ::: {.panel-tabset .nav-pills group="treatment"}
 ```{r}
@@ -829,8 +829,7 @@ for (kk in 1:length(p_s)) {
 
 ## Supporting Data
 
-::: {#supporting-data .panel-tabset}  
-
+::: {#supporting-data .panel-tabset}
 ### Physical Examination
 
 Elements of the physical examination are classified using a subjective mild/moderate/severe scale. Cells are filled according to the the magnitude of deviation ([**none**]{style="color: #e2e2e2"}, [**mild**]{style="color: #E5C9CD"}, [**moderate**]{style="color: #E39AA8"}, [**severe**]{style="color: #D65979"}, [**not applicable**]{style="color: #f7e0a1"}). Missing data are left blank.

@@ -88,7 +88,7 @@ build_outcome_profile <- function(out_all){
         surgname = "Surgery"
       ) %>% 
       tab_header(
-        title = md(glue("**{sdstr} Patient Outcome Profile**"))
+        title = md(glue("**{sdstr} Treatment Effect** (\u0394~Treated~ - \u0394~Control~)"))
       ) %>% 
       tab_style( 
         style = cell_text(align = "left"),
@@ -104,7 +104,7 @@ build_outcome_profile <- function(out_all){
       ) %>% 
       tab_style(
         style = cell_text(style = "italic"),
-        locations = list(cells_body(columns = surgname), cells_source_notes())
+        locations = list(cells_body(columns = surgname))
       ) %>% 
       tab_style(
         style = cell_text(size = "x-small"),
@@ -113,9 +113,16 @@ build_outcome_profile <- function(out_all){
           cells_body(columns = c(lab_Structure, lab_Kinematics, lab_GDI, lab_FAQT))
         )
       ) %>% 
-      tab_source_note(source_note = "Unlikely [0%-20%), Somewhat Unlikely [20%-40%), Neither [40%-60%), Somewhat Likely [60%-80%), Likely [80%-100%)") %>%
+      tab_source_note(
+        source_note = md("**Chance of exceeding clinically meaningful threshold <br> 
+                         <span style='color:#983A81;'>Unlikely [0%-20%)</span>, 
+                         <span style='color:#DBC1D2;'>Somewhat Unlikely [20%-40%)</span>,
+                         <span style='color:#808080;'>Neither [40%-60%)</span>, 
+                         <span style='color:#BCCDB7;'>Somewhat Likely [60%-80%)</span>,
+                         <span style='color:#2B6C00;'>Likely [80%-100%)</span>**")
+      ) %>%
       cols_width(
-        surgname ~ px(250),
+        surgname ~ px(275),
         everything() ~ px(150)
       ) %>% 
       data_color(
@@ -158,7 +165,7 @@ build_outcome_profile <- function(out_all){
         domain = c(0, 100),
         autocolor_text = TRUE
       )
-
+    
     return(res)
   }
   

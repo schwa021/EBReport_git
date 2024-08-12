@@ -51,6 +51,7 @@ pred_outcome_by_bart <- function(xx, surglist, s, bartlist, vlabs) {
           )
       }
       
+      # Build threshold labels -----
       thresh_lab_side <- function(vv, xx, sd){
         xx_side <- case_when(sd=="L" ~ xx[1,], sd=="R" ~ xx[2,])
         thresh <- get_outcome_thresh(vv, xx_side)
@@ -63,10 +64,23 @@ pred_outcome_by_bart <- function(xx, surglist, s, bartlist, vlabs) {
         return(lab)
       }
       
+      # Build alternative threshold labels -----
+      thresh_lab_side2 <- function(vv, posttau, sd){
+        ix <- ifelse(sd == "L", 1, 2)
+        tau_ci <- quantile(posttau[ix,], probs = c(.05, .50, .95), na.rm = T)
+        tau_scale <- trunc(log10(abs(tau_ci)))
+        tau_round <- ifelse(max(tau_scale) > 0, 0, 1)
+        tau_ci <- round(tau_ci, tau_round)
+        lab <- glue("\u0394 {vlabs[vv]} = {tau_ci[2]}")
+        return(lab)
+      }
+      
       p_thresh_L <- p_thresh_side(vv, xx, "L")
-      thresh_lab_L <- thresh_lab_side(vv, xx, "L") 
+      # thresh_lab_L <- thresh_lab_side(vv, xx, "L") 
+      thresh_lab_L <- thresh_lab_side2(vv, posttau, "L") 
       p_thresh_R <- p_thresh_side(vv, xx, "R")
-      thresh_lab_R <- thresh_lab_side(vv, xx, "R")
+      # thresh_lab_R <- thresh_lab_side(vv, xx, "R")
+      thresh_lab_R <- thresh_lab_side2(vv, posttau, "R")
       
       p_thresh <- c(p_thresh_L, p_thresh_R)
       thresh_lab <- c(thresh_lab_L, thresh_lab_R)

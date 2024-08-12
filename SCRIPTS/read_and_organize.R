@@ -65,6 +65,11 @@ read_and_organize <- function(dd) {
         interval_DFEO = interval_DFEO > 0 & interval_DFEO_Patellar_Advance == 0,
         interval_Patellar_Advance = interval_Patellar_Advance > 0 & interval_DFEO_Patellar_Advance == 0,
       ) %>% 
+      ## Define DFEO +/- PTA (DFEOx)
+      mutate(
+        prior_DFEOx = prior_DFEO | prior_DFEO_Patellar_Advance,
+        interval_DFEOx = interval_DFEO | interval_DFEO_Patellar_Advance
+      ) %>% 
       ## Recode surgery as 1 or 0
       mutate(across(
         c(starts_with("interval"), starts_with("prior")),
@@ -124,6 +129,10 @@ read_and_organize <- function(dd) {
         prior_DFEO_Patellar_Advance = prior_DFEO > 0 & prior_Patellar_Advance > 0,
         prior_DFEO = prior_DFEO > 0 & prior_DFEO_Patellar_Advance == 0,
         prior_Patellar_Advance = prior_Patellar_Advance > 0 & prior_DFEO_Patellar_Advance == 0,
+      ) %>% 
+      ## Define DFEO +/- PTA (DFEOx)
+      mutate(
+        prior_DFEOx = prior_DFEO | prior_DFEO_Patellar_Advance
       ) %>% 
       ## Recode surgery as 1 or 0
       mutate(across(

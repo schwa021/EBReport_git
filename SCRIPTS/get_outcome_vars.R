@@ -45,7 +45,7 @@ get_outcome_vars <- function(s){
       c("avgwb", "meansta_Foo_Ang_Trn", "GDI", "FAQT")
   
   if(s == "Foot_and_Ankle_Soft_Tissue") out_vars <- 
-      c("avgnwb", "meansta_Foo_Ang_Trn", "GDI", "FAQT")
+      c("avgnwb", "meanswi_Foo_Ang_Trn", "GDI", "FAQT")
   
    return(out_vars)
   

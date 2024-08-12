@@ -22,7 +22,7 @@ get_file_list <- function(){
   xlist <- 
     Patient %>% 
     left_join(Diagnosis) %>% 
-    inner_join(Diagnosis_lookup) %>% 
+    left_join(Diagnosis_lookup) %>% 
     inner_join(Patient_Events) %>% 
     inner_join(Exam) %>% 
     inner_join(Services) %>% 

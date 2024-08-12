@@ -63,6 +63,11 @@ get_prop_model_vars <- function(s){
         "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag",
         "prior_Patellar_Advance", "prior_DFEO_Patellar_Advance", "prior_DFEO", "prior_Hams_Lengthening")
   
+  if(s == "DFEOx") prop_vars <- 
+      c("KNEE_EXT", "PATELLA_ALTA", "EXTEN_LAG",
+        "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag",
+        "prior_Patellar_Advance", "prior_DFEO_Patellar_Advance", "prior_DFEO", "prior_Hams_Lengthening")
+  
   # Spasticity -----
   if(s == "Neural_Rhizotomy") prop_vars <- 
       c("PLANTFLEX_SPAS", "HAMSTRING_SPAS", "RECT_FEM_SPAS", "ADDUCTOR_SPAS",
