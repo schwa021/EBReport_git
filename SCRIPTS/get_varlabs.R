@@ -40,17 +40,20 @@ get_varlabs <- function(){
     str_replace("Sag", "Sagittal Plane") %>% 
     str_replace("Trn", "Transverse Plane")
   
+  gvarlabx <- glue("\U1F6B6\U1F3FD {gvarlab}")
+  
   temp <-
     tibble(
       Variable = gvar,
-      Label = gvarlab
+      Label = gvarlab,
+      Labelx = as.character(gvarlabx)
     )
   
   varlabs <- 
     varlabs %>% 
     left_join(temp, by = "Variable") %>% 
     mutate(Label = ifelse(!is.na(Label.y), Label.y, Label.x)) %>% 
-    select(Variable, Label, negdir, posdir)
+    select(Variable, Label, Labelx, negdir, posdir)
   
   # Fill in direction labels -----
   # Angles and time

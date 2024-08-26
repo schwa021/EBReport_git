@@ -108,10 +108,10 @@ fmt_shapLR <- function(tall, ptprops, s){
         cells_column_spanners()
       )
     ) |> 
-    tab_style(
-      style = cell_text(style = "italic"),
-      locations = cells_body(columns = starts_with("lab"))
-    ) |> 
+    # tab_style(
+    #   style = cell_text(style = "italic"),
+    #   locations = cells_body(columns = starts_with("lab"))
+    # ) |> 
     tab_style(
       style = cell_text(align = "center"),
       locations = list(

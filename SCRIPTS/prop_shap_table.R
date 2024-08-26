@@ -27,10 +27,17 @@ prop_shap_table <- function(df, sname, mod, x, varlabs){
   makelab <- function(shapres, xside){
     for (f in shapres$results$feature) {
       val <- xside[[f]]
-      lab <- varlabs$Label[varlabs$Variable == f]
+      gaitvbl <- str_detect(f, "^ic|^fo|^ofo|^ofc|^mean|^min|^max|^t_|^mids")
+      val <- ifelse(gaitvbl, round(val), val)
+      
+      
+      # Add label - first check for emoji version, then plain text, then blank
+      lab <- varlabs$Labelx[varlabs$Variable == f]
+      lab <- ifelse(is.na(lab), varlabs$Label[varlabs$Variable == f], lab)
       lab <- ifelse(is.na(lab), f, lab)
       lab <- str_replace_all(lab, "_", " ")
       labx <- str_wrap(glue("{lab} = {val}"), 35)
+      
       shapres$results$label[shapres$results$feature == f] <- labx
       shapres$results$lab[shapres$results$feature == f] <- lab
       shapres$results$value[shapres$results$feature == f] <- as.character(val)

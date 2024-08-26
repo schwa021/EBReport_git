@@ -75,7 +75,7 @@ outcome_plots_BART <-
         y = -Inf,
         hjust = 0,
         vjust = -1,
-        size = 2.3,
+        size = 2.2,
         color = "#005B82",
         fontface = "italic"
       ) +
@@ -85,25 +85,26 @@ outcome_plots_BART <-
         y = -Inf,
         hjust = 1,
         vjust = -1,
-        size = 2.3,
+        size = 2.2,
         color = "#005B82",
         fontface = "italic"
       ) +
-      scale_color_manual(values = c(pal[1], pal[2])) +
-      scale_fill_manual(values = c(pallt[1], pallt[2])) +
+      scale_color_manual(values = c(pal[1], "grey60", pal[2])) +
+      scale_fill_manual(values = c(pallt[1], "grey60", pallt[2])) +
       coord_cartesian(xlim = xlims) +
       guides(color = "none", fill = "none") +
       labs(
-        title = glue("<b>{titside}:</b> <b style='color:{pcol}'>Surgery {pcat}</b>, 
-                       Isoloated Treatment Effect Magnitude: {D}"),
+        # title = glue("<b>{titside}:</b> <b style='color:{pcol}'>Surgery {pcat}</b>, 
+        #                Isoloated Treatment Effect Magnitude: {D}"),
+        title = glue("<b>{titside}:</b> <b style='color:{pcol}'>Surgery {pcat}</b>"),
         x = glue("\u0394 {outvarlab}"),
         y = ""
       ) +
       theme(
         axis.text.y = element_text(
-          angle = 90, 
-          hjust = .5,
-          vjust = .5,
+          # angle = 90, 
+          hjust = 1,
+          vjust = -.5,
           margin = margin(0,-2, 0, 0, unit = "lines")
         ),
         plot.title = element_textbox_simple(

@@ -27,7 +27,9 @@ pred_outcome_by_bart <- function(xx, surglist, s, bartlist, vlabs) {
       
       q0 <- as_tibble(t(apply(post0, 1, quantile, probs = p, names = FALSE)))
       q1 <- as_tibble(t(apply(post1, 1, quantile, probs = p, names = FALSE)))
+      qtau <- as_tibble(t(apply(posttau, 1, quantile, probs = p, names = FALSE)))
       q <- bind_rows(q0, q1)
+      q <- bind_rows(q0, q1, qtau)
       names(q) <- glue("pct{plabs}")
       
       # Compute Cohen's D effect size -----
@@ -86,15 +88,29 @@ pred_outcome_by_bart <- function(xx, surglist, s, bartlist, vlabs) {
       thresh_lab <- c(thresh_lab_L, thresh_lab_R)
       
       # Organize results -----
+      # pred <- 
+      #   tibble(
+      #     surgname = s,
+      #     side = c("L", "R", "L", "R"),
+      #     surg = c("Control", "Control", "Treated", "Treated"),
+      #     var =  vv,
+      #     D = c(DL, DR, DL, DR),
+      #     tau_gt_thresh = rep(p_thresh, 2),
+      #     tau_gt_label = rep(thresh_lab, 2)
+      #   ) %>% 
+      #   bind_cols(q) %>% 
+      #   arrange(side)
+      
+      # Organize results with tau -----
       pred <- 
         tibble(
           surgname = s,
-          side = c("L", "R", "L", "R"),
-          surg = c("Control", "Control", "Treated", "Treated"),
+          side = c("L", "R", "L", "R", "L", "R"),
+          surg = c("Control", "Control", "Treated", "Treated", "Effect", "Effect"),
           var =  vv,
-          D = c(DL, DR, DL, DR),
-          tau_gt_thresh = rep(p_thresh, 2),
-          tau_gt_label = rep(thresh_lab, 2)
+          D = c(DL, DR, DL, DR, DL, DR),
+          tau_gt_thresh = rep(p_thresh, 3),
+          tau_gt_label = rep(thresh_lab, 3)
         ) %>% 
         bind_cols(q) %>% 
         arrange(side)

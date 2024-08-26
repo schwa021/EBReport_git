@@ -9,6 +9,7 @@ format:
     toc-depth: 3
     toc-location: left
     toc-title: "Section"
+    output-file: "EBReport_MRN_YYYY-MM-DD.html"
     fig-dpi: 600
     embed-resources: true
     theme:
@@ -36,11 +37,11 @@ execute:
     
 params:
   # MRN: 606085
-  MRN: 616061
+  MRN: 637372
   # Event_Date: "2018-06-21"
-  Event_Date: "2024-07-11"
+  Event_Date: "2024-08-16"
   deid: FALSE
-  usevideo: FALSE
+  usevideo: TRUE
   usegait: TRUE
   figsave: FALSE
   custom_outcome: FALSE
@@ -163,6 +164,20 @@ outcome_setup <-
 ```
 
 ```{r}
+#| label: get-development-data
+#| cache: false
+
+# devdat <- readxl::read_xlsx("DATA/growth_curves.xlsx")
+dd <- readxl::read_xlsx("DATA/development_curves.xlsx")
+
+devdat <- 
+  dd |> 
+  pivot_longer(-c(vbl, sex, age), names_to = c("pct")) |> 
+  mutate(name = vlabs[vbl])
+
+```
+
+```{r}
 #| label: read-organize-data
 #| include: false
 
@@ -268,7 +283,7 @@ fd$FD <-
   filter(Event_Date <= params$Event_Date)
 
 if(!is.null(fd$FDpp)){
-  fd$FDPP <- 
+  fd$FDpp <- 
     fd$FDpp %>% 
     filter(Event_Date <= params$Event_Date)
 }
@@ -306,7 +321,10 @@ if(!params$deid){
   ptdate <- format(as.Date(params$Event_Date), "%b %Y")
   ptmrn <- xpt$Exam_ID[1]
 }
+
 ```
+
+## `r glue("{ptname}<br>{ptmrn}<br>{ptdate}")`
 
 ## Background
 
@@ -446,6 +464,20 @@ if(params$figsave & !is.null(t_imp)){
   gtsave(t_imp, "FIGURES/GOAL_Importance.png", expand = c(0, 40, 50, 0))
 }
 ```
+
+#### GOAL History
+
+```{r}
+#| label: display-goal
+#| fig-height: 3.5
+
+v <- c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility",
+       "Gait_Func_Mobility", "Gait_Pattern_Appearance", "Image_Esteem",
+       "Pain_Discomfort_Fatigue")
+cap = ""
+p <- plot_development(fd, dat, v, v, cap, devdat)
+p
+```
 :::
 :::
 
@@ -500,16 +532,35 @@ if(!params$deid & !(all(vidlist %in% temp))){
 
 ```{r}
 #| label: show-video
-#| eval: params$usevideo
 #| results: asis
 #| panel: tabset
+#| eval: false
 
-for (kk in 1:length(vidlist)) {
-  cat("\n\n###", str_replace(vidlabs[kk], "_", " + "), "  \n\n")
-  cat("\n\n <video width=800 controls>
-  <source src=", vidlist[kk], " type=video/mp4>
-  </video> \n\n")
-}
+# This is the old video tabs code. Leaving it here for now (26AUG2024)
+# for (kk in 1:length(vidlist)) {
+#   cat("\n\n###", str_replace(vidlabs[kk], "_", " + "), "  \n\n")
+#   cat("\n\n <video width=800 controls>
+#   <source src=", vidlist[kk], " type=video/mp4>
+#   </video> \n\n")
+# }
+```
+
+```{r}
+#| label: generate-html-video-code
+
+source("SCRIPTS/build_video_tabs.R")
+build_video_tabs(vidlist, vidfile)
+```
+
+```{r}
+#| label: display-html-video-code
+#| eval: params$usevideo
+#| results: "asis" 
+#| echo: false
+
+code <- readLines("video_tab_code.txt")
+code <- paste(code, collapse = "\n")
+cat(paste0("```{=html}\n", code, "\n```"))
 ```
 
 ## Treatment Assignment
@@ -703,33 +754,33 @@ out_all <-
 #| label: build-outcome-profile
 #| cache: false
 
-source("SCRIPTS/build_outcome_profile.R")
-outcome_profile <- build_outcome_profile(out_all)
+# source("SCRIPTS/build_outcome_profile.R")
+# outcome_profile <- build_outcome_profile(out_all)
 
 ```
 
-### Outcome Profile
+<!-- ### Outcome Profile -->
 
-**EXPERIMENTAL - Please Consult Outcome Details Before Operating**
+<!-- **EXPERIMENTAL - Please Consult Outcome Details Before Operating** -->
 
-The outcome profile shows the median *treatment effect* for each surgery-outcome combination. Color coding indicates the probability that the treatment effect exceeds clinically meaningful threshold chosen by a panel of experts.  
+<!-- The outcome profile shows the median *treatment effect* for each surgery-outcome combination. Color coding indicates the probability that the treatment effect exceeds clinically meaningful threshold chosen by a panel of experts.   -->
 
-**Treatment Effect = &Delta;~Treated~ - &Delta;~Control~**  
+<!-- **Treatment Effect = &Delta;~Treated~ - &Delta;~Control~**   -->
 
-::: {.panel-tabset .nav-pills}
+<!-- ::: {.panel-tabset .nav-pills} -->
 ```{r}
 #| label: display-outcome-profile
 #| results: asis
 
-for (kk in 1:length(outcome_profile)) {
-  sdstr <- ifelse(kk==1, "Left", "Right")
-  cat("####", sdstr, "\n\n")
-  print(outcome_profile[[kk]])
-  cat("\n\n")
-}
+# for (kk in 1:length(outcome_profile)) {
+#   sdstr <- ifelse(kk==1, "Left", "Right")
+#   cat("####", sdstr, "\n\n")
+#   print(outcome_profile[[kk]])
+#   cat("\n\n")
+# }
 
 ```
-:::
+<!-- ::: -->
 
 ```{r}
 #| label: build-outcome-plots
@@ -943,20 +994,6 @@ for (kk in 1:length(temp)) {
 
 The plots below show the average development of various measurements with age. It is important to keep in mind that many of these exhibit substantial uncertainty (e.g., $\approx\pm 30^\circ$ for Trochanteric Prominence Angle). This uncertainty is not shown.
 
-```{r}
-#| label: get-development-data
-#| cache: false
-
-# devdat <- readxl::read_xlsx("DATA/growth_curves.xlsx")
-dd <- readxl::read_xlsx("DATA/development_curves.xlsx")
-
-devdat <- 
-  dd |> 
-  pivot_longer(-c(vbl, sex, age), names_to = c("pct")) |> 
-  mutate(name = vlabs[vbl])
-
-```
-
 ::: {.panel-tabset .nav-pills}
 #### Height & Weight
 
@@ -988,6 +1025,18 @@ cap = "All angles in degrees"
 p <- plot_development(fd, dat, v, v, cap, devdat)
 p
 ```
+
+#### Contracture
+
+```{r}
+#| label: display-contr-tt
+#| fig-height: 3.5
+
+v <- c("HIP_EXT", "POP_ANG_UNI", "HIP_ABD_0", "KNEE_EXT", "ANK_DORS_0", "ANK_DORS_90")
+cap = "All angles in degrees"
+p <- plot_development(fd, dat, v, v, cap, devdat)
+p
+``` 
 
 #### Motor Control, Mobility, and Gait
 
