@@ -3,6 +3,7 @@ title: "EB GAIT"
 subtitle: "Evidence Based Gait Analysis Interpretation Technique"
 Author: ""
 Date: ""
+
 format:
   html:
     toc: true
@@ -15,11 +16,12 @@ format:
     theme:
       - cosmo
     grid:
-      
       body-width: 1050px
       sidebar-width: 250px
       margin-width: 0px
+      
 lightbox: true
+
 knitr:
   opts_chunk:
     warning: false
@@ -37,9 +39,9 @@ execute:
     
 params:
   # MRN: 606085
-  MRN: 637372
+  MRN: 681343
   # Event_Date: "2018-06-21"
-  Event_Date: "2024-08-16"
+  Event_Date: "2024-04-29"
   deid: FALSE
   usevideo: TRUE
   usegait: TRUE
@@ -140,13 +142,12 @@ vlabs <- varlabs$Label
 names(vlabs) <- varlabs$Variable 
 xlabs <- names(vlabs)
 names(xlabs) <- vlabs
-
 neglabs <- varlabs$negdir
 names(neglabs) <- varlabs$Variable
 poslabs <- varlabs$posdir
 names(poslabs) <- varlabs$Variable
 
-# Read outcome setup -----
+# Read outcome setup containing outcome choices for each surgery -----
 if(params$custom_outcome){
   outcome_setup <- readxl::read_xlsx("DATA/Outcome_Setup_Custom.xlsx", sheet = "Main")
 } else {
@@ -169,12 +170,10 @@ outcome_setup <-
 
 # devdat <- readxl::read_xlsx("DATA/growth_curves.xlsx")
 dd <- readxl::read_xlsx("DATA/development_curves.xlsx")
-
 devdat <- 
   dd |> 
   pivot_longer(-c(vbl, sex, age), names_to = c("pct")) |> 
   mutate(name = vlabs[vbl])
-
 ```
 
 ```{r}
@@ -182,6 +181,7 @@ devdat <-
 #| include: false
 
 # Get clinical data from RRFMP output -----
+# Note that pre-processed data contains propensity scores...
 if(file.exists("DATA/preprocessed_data_current.RDS")){
   dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
   dat <- readRDS("DATA/preprocessed_data_current.RDS")
@@ -265,6 +265,7 @@ library(DBI)
 # Option to do analysis without gait data -----
 # If usegait = TRUE but no gait data is present things still work
 if(params$usegait){
+  # Read barefoot data (tt=17) and AFO data (tt=18) -----
   datc3d <- read_c3d_one(params$MRN, tt=17)
   datc3d_afo <- read_c3d_one(params$MRN, tt=18)
   plotgait <- !is.null(datc3d)
@@ -287,7 +288,6 @@ if(!is.null(fd$FDpp)){
     fd$FDpp %>% 
     filter(Event_Date <= params$Event_Date)
 }
-
 
 # Add NA for missing variables - this is for limbs without gait data -----
 if(params$usegait == FALSE){
@@ -321,7 +321,6 @@ if(!params$deid){
   ptdate <- format(as.Date(params$Event_Date), "%b %Y")
   ptmrn <- xpt$Exam_ID[1]
 }
-
 ```
 
 ## `r glue("{ptname}<br>{ptmrn}<br>{ptdate}")`
@@ -341,6 +340,7 @@ if(!params$deid){
   tit <- glue("{ptname} ({ptmrn}), Exam Date: {ptdate}")
 }
 
+# Build patient summary data -----
 tdat <- 
   xpt |> 
   filter(SIDE == "L") |> 
@@ -410,7 +410,7 @@ if(params$figsave){
 #### Treatment
 
 ```{r}
-pi$tsurg
+if(!is.null(pi$tsurg)) pi$tsurg
 # Save for external use -----
 if(params$figsave){
   gtsave(pi$tsurg, "FIGURES/Treatment_History.png", expand = c(0, 40, 50, 0))
@@ -489,8 +489,9 @@ p
 #| include: false
 #| cache: false
 
+# This function compresses videos using ffmpeg -----
 compfun <- function(temp, vidlist, vidlabs){
-  # Remove old.....
+  # Remove old videos.....
   unlink(temp)
   # Compress all videos.....
   vidname <- vector()
@@ -503,11 +504,11 @@ compfun <- function(temp, vidlist, vidlabs){
   }  
 }
 
-# List of all videos -----
+# Generate list of all videos -----
 temp <- fd$FD %>% arrange(rev(age))
 ages <- temp$age %>% unique()
 
-# Labels for videos -----
+# Generate labels for videos -----
 yrs <- trunc(ages)
 mos <- round(12 * (ages - yrs))
 vidlabs <- glue("{yrs}yr_{mos}mo")
@@ -518,6 +519,7 @@ vidfile <- temp %>% filter(SIDE == "L") %>% pull(Video_File)
 temp <- list.files(pattern = ".mp4$")
 
 # Use Deidentified video if appropriate -----
+# Deidentified videos created separetly and stored in VIDEO/MRN/
 if(params$deid & params$usevideo){
   res <- str_extract(vidfile, "[^\\\\]+$")
   vidfile <- glue("VIDEO/{params$MRN}/{res}")
@@ -547,7 +549,9 @@ if(!params$deid & !(all(vidlist %in% temp))){
 
 ```{r}
 #| label: generate-html-video-code
+#| cache: false
 
+# Generate the code for the video tabs -----
 source("SCRIPTS/build_video_tabs.R")
 build_video_tabs(vidlist, vidfile)
 ```
@@ -558,6 +562,8 @@ build_video_tabs(vidlist, vidfile)
 #| results: "asis" 
 #| echo: false
 
+# Display the video tabs -----
+# Quarto does not support chapters, so we generate HTML and display it directly
 code <- readLines("video_tab_code.txt")
 code <- paste(code, collapse = "\n")
 cat(paste0("```{=html}\n", code, "\n```"))
@@ -575,7 +581,7 @@ The likelihood that the limb would have undergone the indicated surgery based on
 > Check **Outcome Predictions** tab for additional information.*</center>
 
 ```{r}
-#| label: compute-propensity
+#| label: compute-propensity-posteriors
 #| cache: false
 #| include: false
 
@@ -598,11 +604,12 @@ xR <- xpt |> filter(SIDE == "R")
 ```
 
 ```{r}
-#| label: display-profile
+#| label: display-propensity-profile
 #| cache: false
 
 source("SCRIPTS/get_prop.R")
 
+# Get left and right propensity and format into L/R propensity table -----
 propL <- get_prop(propLmean, post, surglist, "L")
 propR <- get_prop(propRmean, post, surglist, "R")
 proptbl <- ptableLR(propL, propR)
@@ -619,7 +626,7 @@ if(params$figsave){
 #| include: false
 #| cache: false
 
-# Build detail tables -----
+# Build detail tables for each surgery using Shapley values -----
 tall <- list()
 for (s in surglist) {
   mod <- get(glue("mod_{s}"))
@@ -641,7 +648,7 @@ for (s in surglist) {
 
 ### Clinical Reasoning
 
-Clinical factors underlying the historical practice standard, arranged from largest positive contributor ([**indications**]{style="color: #005600"}) to largest negative contributor ([**counter-indications**]{style="color: #841859"}). The top row shows the median (5%, 95%) propensity, color coded from [**high propensity**]{style="color: #005600"} to [**low propensity**]{style="color: #841859"}. The range in propensities accounts for measurement error in the physical examination and three-dimensional gait data. <br> <br>
+Clinical factors underlying the historical practice standard, arranged from largest positive contributor ([**indications**]{style="color: #005600"}) to largest negative contributor ([**counter-indications**]{style="color: #841859"}). The top row shows the median (5%, 95%) surgery likelihood, color coded from [**high likelihood**]{style="color: #005600"} to [**low likelihood**]{style="color: #841859"}. The range in propensities accounts for measurement error variability in practice.  The &#x1F6B6;&#x1F3FD;&#x200D;&#x2642;&#xFE0F;️ symbol indicates a kinematic variable<br> <br>
 
 ::: {.panel-tabset .nav-pills group="treatment"}
 ```{r}
@@ -700,24 +707,24 @@ for (kk in 1:length(tLR)) {
 source("SCRIPTS/build_pred_outcome_BART.R")
 bartlist <- readRDS("DATA/outcome_models_bartlist.RDS")
 
-# Check chosen outcomes -----
-v <- 
-  outcome_setup %>%
-  filter(surg == s) %>%
-  arrange(name) %>%
-  pull(value)
+# Find chosen for surgery s -----
+# v <- 
+#   outcome_setup %>%
+#   filter(surg == s) %>%
+#   arrange(name) %>%
+#   pull(value)
 
 # Add (top) automatically or (bottom) manually
-vadd <- v[!(v %in% names(bartlist))]
+# vadd <- v[!(v %in% names(bartlist))]
 # vadd <- c("avgwb", "avgnwb", "meanswi_Foo_Ang_Trn")
 
 # Fit and Save Models -----
-if(length(vadd) > 0){
-  temp <- vadd %>% map(\(v) build_pred_outcome_BART(dat, v), .progress = TRUE)
-  names(temp) <- vadd
-  bartlist <- c(bartlist, temp)
-  saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
-}
+# if(length(vadd) > 0){
+#   temp <- vadd %>% map(\(v) build_pred_outcome_BART(dat, v), .progress = TRUE)
+#   names(temp) <- vadd
+#   bartlist <- c(bartlist, temp)
+#   saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
+# }
 ```
 
 ```{r}
@@ -744,43 +751,10 @@ for (ss in surglist) {
   temp[[ss]] <- out_all[[ss]] %>% list_rbind()
 }
 
-out_all <- 
-  temp %>% 
-  list_rbind()
+# Arrange outcomes as tibble -----
+out_all <- temp %>% list_rbind()
 
 ```
-
-```{r}
-#| label: build-outcome-profile
-#| cache: false
-
-# source("SCRIPTS/build_outcome_profile.R")
-# outcome_profile <- build_outcome_profile(out_all)
-
-```
-
-<!-- ### Outcome Profile -->
-
-<!-- **EXPERIMENTAL - Please Consult Outcome Details Before Operating** -->
-
-<!-- The outcome profile shows the median *treatment effect* for each surgery-outcome combination. Color coding indicates the probability that the treatment effect exceeds clinically meaningful threshold chosen by a panel of experts.   -->
-
-<!-- **Treatment Effect = &Delta;~Treated~ - &Delta;~Control~**   -->
-
-<!-- ::: {.panel-tabset .nav-pills} -->
-```{r}
-#| label: display-outcome-profile
-#| results: asis
-
-# for (kk in 1:length(outcome_profile)) {
-#   sdstr <- ifelse(kk==1, "Left", "Right")
-#   cat("####", sdstr, "\n\n")
-#   print(outcome_profile[[kk]])
-#   cat("\n\n")
-# }
-
-```
-<!-- ::: -->
 
 ```{r}
 #| label: build-outcome-plots
@@ -792,7 +766,6 @@ jj <- 0
 
 for (s in surglist) {
   # Make outcome plot for each outcome variable for surgery s -----
-  # v <- get_outcome_vars(s)
   v <- 
     outcome_setup %>%
     filter(surg == s) %>%
@@ -802,12 +775,8 @@ for (s in surglist) {
   # Option to customize outcome vars (now use DATA/Outcome_Setup_Custom.xlsx) -----
   # if(s == "Femoral_Derotation_Osteotomy") v <-
   # c("HIP_EXT_ROT", "meansta_Hip_Ang_Trn", "meansta_Pel_Ang_Sag", "meansta_Foo_Ang_Trn")
-  
-  poutL <- list()
-  poutR <- list()
-  kk <- 0
-  
-  # Get propensity for title color -----
+
+  # Get propensity for setting title color -----
   pvalL <- 
     propL |> 
     filter(Surgery == str_replace_all(s, "_", " ")) |> 
@@ -817,9 +786,12 @@ for (s in surglist) {
     filter(Surgery == str_replace_all(s, "_", " ")) |> 
     pull(q50)/100
   
+  poutL <- list()
+  poutR <- list()
+  kk <- 0
+  # Loop over outcome variables -----
   for (vv in v) {
     kk <- kk + 1
-    
     poutL[[kk]] <-
       outcome_plots_BART(
         s = s,
@@ -859,9 +831,7 @@ for (s in surglist) {
 
 ### Outcome Details
 
-Plots show [*Change Scores*]{.underline} for scale variables and [*Distributions*]{.underline} for categorical variables. Matched [**Treated**]{style="color: #005600"} limbs underwent the surgery while [**Control**]{style="color: #841859"} limbs did not.
-
-The mean (point), 50% prediction interval (thick line), and 90% prediction interval (thin line) are shown, along with outcomes of individual matches (tick marks). The effect of the **isolated** treatment on the given outcome measure is described using Cohen's D and conventional thresholds.<br>
+Plots show [*Change Scores*]{.underline}. [**Treated**]{style="color: #005600"} limbs underwent the surgery while [**Control**]{style="color: #841859"} limbs did not. The mean (point), 50% prediction interval (thick line), and 90% prediction interval (thin line) are shown.<br>
 
 ::: {.panel-tabset .nav-pills group="treatment"}
 ```{r}
@@ -883,7 +853,7 @@ for (kk in 1:length(p_s)) {
 ::: {#supporting-data .panel-tabset}
 ### Physical Examination
 
-Elements of the physical examination are classified using a subjective mild/moderate/severe scale. Cells are filled according to the the magnitude of deviation ([**none**]{style="color: #e2e2e2"}, [**mild**]{style="color: #E5C9CD"}, [**moderate**]{style="color: #E39AA8"}, [**severe**]{style="color: #D65979"}, [**not applicable**]{style="color: #f7e0a1"}). Missing data are left blank.
+Cells are colored according to severity ([**none**]{style="color: #e2e2e2"}, [**mild**]{style="color: #E5C9CD"}, [**moderate**]{style="color: #E39AA8"}, [**severe**]{style="color: #D65979"}, [**not applicable**]{style="color: #f2cc64"}).
 
 ```{r}
 #| label: build-physical-exam-tables
@@ -896,7 +866,7 @@ source("SCRIPTS/build_spatbl.R")
 source("SCRIPTS/build_strseltbl.R")
 source("SCRIPTS/build_foottbl.R")
 
-# Build ortho tables -----
+# Build contracture and torsion tables -----
 meas <- c(
   "HIP_FLEX", "HIP_EXT", "HIP_ABD_0", "HIP_ABD_90", "POP_ANG_UNI", "POP_ANG_BI",
   "KNEE_EXT", "KNEE_FLEX", "EXTEN_LAG", "PATELLA_ALTA", "ANK_DORS_0", "ANK_DORS_90"
@@ -952,8 +922,6 @@ for (kk in 1:length(temp)) {
 
 ### Kinematics
 
-Current and previous kinematics, which play a significant role in propensity scores and matching-based outcome estimates.
-
 ```{r}
 #| label: build-kinematic-plots
 #| cache: false
@@ -992,7 +960,7 @@ for (kk in 1:length(temp)) {
 
 ### Development
 
-The plots below show the average development of various measurements with age. It is important to keep in mind that many of these exhibit substantial uncertainty (e.g., $\approx\pm 30^\circ$ for Trochanteric Prominence Angle). This uncertainty is not shown.
+The plots show the development of various measurements with age. Measurement uncertainty, which may be substantial (e.g., $\approx\pm 30^\circ$ for Trochanteric Prominence Angle) is not shown.
 
 ::: {.panel-tabset .nav-pills}
 #### Height & Weight
@@ -1097,7 +1065,7 @@ if(!is.null(datc3d_afo)){
 #| results: asis
 
 cat("## Other Conditions \n\n") 
-cat("This will typically be barefoot vs. orthoses but may include other comparisons. \n\n")
+cat("Typically barefoot vs. orthoses but may include other comparisons. \n\n")
 
 ```
 

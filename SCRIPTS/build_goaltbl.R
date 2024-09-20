@@ -85,7 +85,7 @@ build_goaltbl <- function(xpt, datpre) {
     select(all_of(vv)) |>
     pivot_longer(everything()) |>
     mutate(
-      sev = ptsev,
+      sev = factor(ptsev, levels = c(1, 2, 3, 4)),
       qtl = ptqtl,
       name = str_replace_all(name, "_", " ")
     )

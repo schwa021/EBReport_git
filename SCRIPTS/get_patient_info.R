@@ -50,6 +50,9 @@ get_patient_info <- function(xpt, deid) {
       birthoz = round(16 * (BIRTH_WEIGHT - birthpound))
     )
   
+  ix <- which(is.na(birthdat))
+  birthdat[ix] <- "?"
+  
   # Birth Problems -----
   probdat <- 
     Patient |> 
@@ -118,6 +121,9 @@ get_patient_info <- function(xpt, deid) {
     mutate(
       NOTICED_PROB = round(12 * NOTICED_PROB)
     )
+  
+  ix <- which(is.na(devdat))
+  devdat[ix] <- "?"
   
   tdev <- 
     devdat |> 
@@ -269,6 +275,8 @@ get_patient_info <- function(xpt, deid) {
         row_group.padding = px(8),
         data_row.padding.horizontal = px(10)
       )
+  } else{
+    tsurg <- NULL
   }
   
   return(list("tbirth" = tbirth, "tdev" = tdev, "tsurg" = tsurg))

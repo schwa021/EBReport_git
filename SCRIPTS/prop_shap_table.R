@@ -1,7 +1,10 @@
+# This function creates a table of Shapley values for a single observation
+
 prop_shap_table <- function(df, sname, mod, x, varlabs){
+  # Color pallette -----
   pal <- diverging_hcl(n = 5, h = c(324, 120), c = 60, l = c(40, 97), power = 1.8)
   
-  # Get Left and Right x -----
+  # Get Left and Right patient data xL/xR -----
   getx <- function(xx, side){
     xx %>% 
       filter(SIDE == side) %>% 
@@ -18,18 +21,20 @@ prop_shap_table <- function(df, sname, mod, x, varlabs){
   xR <- getx(x, "R")
   
   # Compute Shapley Values -----
+  # Recently increased iterations to 100 (20SEP2024)
   shapmod <- Predictor$new(mod, data = df[names(mod$X)])
   set.seed(42)
-  shapL <- Shapley$new(shapmod, x.interest = xL, sample.size = 15)
-  shapR <- Shapley$new(shapmod, x.interest = xR, sample.size = 15)
+  # tictoc::tic()
+  shapL <- Shapley$new(shapmod, x.interest = xL, sample.size = 100)
+  shapR <- Shapley$new(shapmod, x.interest = xR, sample.size = 100)
+  # tictoc::toc()
   
-  # Make Labels -----
+  # Make Labels for shapley table -----
   makelab <- function(shapres, xside){
     for (f in shapres$results$feature) {
       val <- xside[[f]]
       gaitvbl <- str_detect(f, "^ic|^fo|^ofo|^ofc|^mean|^min|^max|^t_|^mids")
-      val <- ifelse(gaitvbl, round(val), val)
-      
+      val <- ifelse(gaitvbl, round(val), as.character(val))
       
       # Add label - first check for emoji version, then plain text, then blank
       lab <- varlabs$Labelx[varlabs$Variable == f]
@@ -63,7 +68,7 @@ prop_shap_table <- function(df, sname, mod, x, varlabs){
   shapL <- arrangeshap(shapL)
   shapR <- arrangeshap(shapR)
   
-  # Make table -----
+  # Make Shapley value tables -----
   tblL <- 
     shapL %>% 
     select(phix, lab, value) %>% 

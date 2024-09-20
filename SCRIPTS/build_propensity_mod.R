@@ -1,13 +1,19 @@
+# This function builds a propensity model using the BART algorithm and evaluates it on test data.
+# s is the surgery of interest, dat is the dataset, and fp2fn is the cost of a false positive relative to a false negative.
+# The function returns a list containing the model, the optimal test metrics, and the metrics at each threshold.
+
 build_propensity_mod <- function(s, dat, fp2fn=1){
   
-  getres <- function(metrics, prob){
-    res <-
-      metrics |>
-      filter(thresh == prob) |>
-      mutate(across(everything(),~ round(.,2)))
-    return(res)
-  }
+  # This function gets the diagnostic metrics at a given probability threshold -----
+  # getres <- function(metrics, prob){
+  #   res <-
+  #     metrics |>
+  #     filter(thresh == prob) |>
+  #     mutate(across(everything(),~ round(.,2)))
+  #   return(res)
+  # }
   
+  # This function calculates several diagnostic metrics for a given threshold -----
   calculate_metrics <- function(threshold, data, cost) {
     predicted_positive <- data$probabilities >= threshold
     actual_positive <- data$actual_classes == 1
@@ -30,22 +36,22 @@ build_propensity_mod <- function(s, dat, fp2fn=1){
              MCC = MCC, FPminusFN = cost * FP - FN))
   }
   
-  # Get features -----
+  # Get features for the chosen surgery s -----
   prop_vars <- get_prop_model_vars(s)
   surg <- glue("interval_{s}")
   
-  # Train/Test by Exam_ID -----
+  # Define training and testing sets -----
   set.seed(42)
   ex <- unique(dat$Exam_ID)
   extrain <- sample(ex, size = round(.7 * length(ex)))
   dtrain <- dat |> filter(Exam_ID %in% extrain)
   dtest <- dat |> filter(!(Exam_ID) %in% extrain)
   
-  # Get balanced dataset -----
+  # Get balanced dataset for training -----
   ncase <- table(dtrain[[surg]])["1"]
   dtrainbal <- slice_sample(dtrain, n = ncase, by = all_of(surg))
   
-  # Make split -----
+  # Make data split -----
   xtrain <- dtrain |> select(all_of(prop_vars)) |> data.frame()
   ytrain <- dtrain |> select(matches(surg)) |> pull(1)
   xtrainbal <- dtrainbal |> select(all_of(prop_vars)) |> data.frame()
@@ -53,16 +59,9 @@ build_propensity_mod <- function(s, dat, fp2fn=1){
   xtest <- dtest |> select(all_of(prop_vars)) |> data.frame()
   ytest <- dtest |> select(matches(surg)) |> pull(1)
   
-  # Build model -----
+  # Train model -----
   mod <-
-    bartMachine(
-      xtrainbal,
-      ytrainbal,
-      use_missing_data = T,
-      serialize = T,
-      seed = 42,
-      use_missing_data_dummies_as_covars = T
-    )
+    bartMachine(xtrainbal, ytrainbal, use_missing_data = T, serialize = T, seed = 42, use_missing_data_dummies_as_covars = T)
   
   # Evaluate model on test data -----
   ytest_prob <- predict(mod, new_data = xtest)
@@ -70,6 +69,7 @@ build_propensity_mod <- function(s, dat, fp2fn=1){
   conf <- table(ytest, ytest_pred)
   
   # Generate metrics for test data -----
+  # By default, FP and FN cost are equal (wt_fp2fn = 1)
   data <- data.frame(probabilities = ytest_prob, actual_classes = ytest)
   prev <- sum(ytrain==1)/length(ytrain)
   wt_fp2fn <- 1
@@ -81,6 +81,7 @@ build_propensity_mod <- function(s, dat, fp2fn=1){
   f <- splinefun(x = 1 - metrics$spec, y = metrics$sens, ties = mean)
   auc <- integrate(f, 0, 1)$value |> round(2)
   
+  # Organize optimal test metrics -----
   opttest <- data.frame(
     prevalence = prev,
     sensitivity = conf["1", "1"] / (conf["1", "1"] + conf["1", "0"]),
@@ -92,6 +93,7 @@ build_propensity_mod <- function(s, dat, fp2fn=1){
   ) |> 
     round(2)
   
+  # Return model and test metrics
   return(list("mod" = mod, "opt" = opttest, "metrics" = metrics))
   
 }

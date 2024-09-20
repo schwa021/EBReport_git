@@ -1,3 +1,10 @@
+# This function builds a tabbed interface for a set of videos with chapters
+# The function takes a list of video files and a list of marker files (chapter info) as input
+# The function generates an HTML file with the tabbed interface
+# The function also generates a JavaScript function to set chapters in the videos
+# The resulting HTML is written to a temporary file called "video_tab_code.txt"
+# This file is then included in the R Markdown document to display the tabbed interface
+
 build_video_tabs <- function(vidlist, vidfile){
 
   # Define the number of videos and their names -----
@@ -7,10 +14,8 @@ build_video_tabs <- function(vidlist, vidfile){
   tabnames <- str_replace(vidlist, ".mp4", "")
   video_files <- vidlist
   marker_files <- str_replace(vidfile, "mp4", "mkr")
-  # video_files <- paste0("testvid", 1:N, ".mp4")
-  # marker_files <- paste0("testvid", 1:N, ".mkr")
   
-  # Initialize HTML content
+  # Initialize HTML content -----
   html_content <- "<style>
 /* Button styling */
 button {
@@ -31,7 +36,7 @@ button:hover {
 <div>
   <ul class=\"nav nav-tabs\" role=\"tablist\">"
 
-# Add tabs for each video
+# Add tabs for each video -----
 for (i in 1:N) {
   html_content <- paste0(html_content, sprintf(
     "<li class=\"nav-item\">
@@ -63,7 +68,7 @@ parse_mkr <- function(file) {
   )
 }
 
-# Add content for each tab
+# Add content for each tab -----
 for (i in 1:N) {
   video_file <- video_files[i]
   marker_file <- marker_files[i]
@@ -122,6 +127,6 @@ function setChapter(videoId, startTime, endTime) {
 }
 </script>")
 
-# Write the HTML content to a file
+# Write the HTML content to a file -----
 writeLines(html_content, "video_tab_code.txt")
 }

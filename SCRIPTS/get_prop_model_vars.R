@@ -1,9 +1,12 @@
+# This function is essentially a lookup table. It returns a list of features to be
+# used in propensity models for a given input surgery s
+
 get_prop_model_vars <- function(s){
   
   # Derotation Osteotomies -----
   if(s == "Femoral_Derotation_Osteotomy") prop_vars <- 
       c("HIP_INT_ROT", "HIP_EXT_ROT", 
-        "FemTor",
+        "FemTor",                    # Note that FemTor is EOS femoral torsion if available, otherwise TPAT
         "BIMAL",
         "WB_4FTPOS", "WB_4FTPOS2",
         "maxswi_Kne_Ang_Cor", "minswi_Kne_Ang_Cor",
@@ -12,7 +15,7 @@ get_prop_model_vars <- function(s){
   
   if(s == "Tibial_Derotation_Osteotomy") prop_vars <- 
       c("HIP_INT_ROT", "HIP_EXT_ROT", 
-        "FemTor", 
+        "FemTor",                    # Note that FemTor is EOS femoral torsion if available, otherwise TPAT 
         "BIMAL",
         "WB_4FTPOS", "WB_4FTPOS2",
         "maxswi_Kne_Ang_Cor", "minswi_Kne_Ang_Cor",
@@ -50,22 +53,22 @@ get_prop_model_vars <- function(s){
   # Crouch -----
   if(s == "Patellar_Advance") prop_vars <- 
       c("KNEE_EXT", "PATELLA_ALTA", "EXTEN_LAG",
-        "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag",
+        "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag", "midsta_Kne_Ang_Sag",
         "prior_Patellar_Advance", "prior_DFEO_Patellar_Advance", "prior_DFEO", "prior_Hams_Lengthening")
   
   if(s == "DFEO") prop_vars <- 
       c("KNEE_EXT", "PATELLA_ALTA", "EXTEN_LAG",
-        "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag",
+        "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag", "midsta_Kne_Ang_Sag",
         "prior_Patellar_Advance", "prior_DFEO_Patellar_Advance", "prior_DFEO", "prior_Hams_Lengthening")
   
   if(s == "DFEO_Patellar_Advance") prop_vars <- 
       c("KNEE_EXT", "PATELLA_ALTA", "EXTEN_LAG",
-        "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag",
+        "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag", "midsta_Kne_Ang_Sag",
         "prior_Patellar_Advance", "prior_DFEO_Patellar_Advance", "prior_DFEO", "prior_Hams_Lengthening")
   
   if(s == "DFEOx") prop_vars <- 
       c("KNEE_EXT", "PATELLA_ALTA", "EXTEN_LAG",
-        "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag",
+        "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag", "midsta_Kne_Ang_Sag",
         "prior_Patellar_Advance", "prior_DFEO_Patellar_Advance", "prior_DFEO", "prior_Hams_Lengthening")
   
   # Spasticity -----
@@ -79,7 +82,7 @@ get_prop_model_vars <- function(s){
   
   if(s == "Rectus_Transfer") prop_vars <- 
       c("RECT_FEM_SPAS",
-        "maxswi_Kne_Ang_Sag", "ic_Kne_Ang_Sag",
+        "maxswi_Kne_Ang_Sag", "ic_Kne_Ang_Sag", "romswi_Kne_Ang_Sag",
         "prior_Rectus_Transfer", "prior_Neural_Rhizotomy")
   
   
