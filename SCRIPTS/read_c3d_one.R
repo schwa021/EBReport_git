@@ -1,3 +1,5 @@
+# This is the main function for reading data from a c3d file and organizing it -----
+
 read_c3d_one <- function(mrn_in, tt){
   # Load Libraries -----
   library(tidyverse)
@@ -34,7 +36,7 @@ read_c3d_one <- function(mrn_in, tt){
   # Get Statistics -----
   source("SCRIPTS/allstats.R")
   
-  # Choose files: note BF vs. AFO via "tt" -----
+  # Choose all existing files: note BF vs. AFO via "tt" -----
   xlist_new <- 
     get_file_list() |> 
     filter(
@@ -64,7 +66,7 @@ read_c3d_one <- function(mrn_in, tt){
     select(-Birth_Date) |>
     mutate(needupdate = T)
   
-  # Allocate Ang/Mom/Pwr... for trial values -----
+  # Allocate Ang/Mom/Pwr/... for trial values -----
   Ang <- vector(mode = "list", length = nrow(TrialInfo))
   Mom <- vector(mode = "list", length = nrow(TrialInfo))
   Pwr <- vector(mode = "list", length = nrow(TrialInfo))
@@ -73,23 +75,24 @@ read_c3d_one <- function(mrn_in, tt){
   Len <- vector(mode = "list", length = nrow(TrialInfo))
   ixupdate <- which(rep(TRUE, nrow(TrialInfo)))
   
-  # Loop over  files in list -----------------------------------------------------
+  # Loop over  files in list -----
   for (kk in 1:max(ixupdate)) {
 
-        # Read in c3d file -----
+    # Read in c3d file -----
+    # If there are no kinematics then skip file
     if(!TrialInfo$Performed_Kinematics[kk]) next
     
     # If it's a C3D file -----
     if(str_detect(TrialInfo$Filename[kk], "c3d|C3d|C3D")){ 
       
+      # Read in C3D file using Bruce MacWilliams' ReadC3D function
       c <- tryCatch(
         ReadC3D(C3DFileName = TrialInfo$Filename[kk], MarkerDataFormat = "wide"),
         error = function(e) NULL
       )
-      
       if(is.null(c) | is.null(c$Header)) next
       
-      # Extract Angles (G), Moments (M), and Power (P) -----
+      # Extract Angles (Ang), Trunk data (Trk), etc... -----
       Ang[[kk]] <- extract_data(c, typestr = "Angle")
       Trk[[kk]] <- extract_data(c, typestr = "Trunk")
       Len[[kk]] <- extract_data(c, typestr = "Length")
@@ -99,7 +102,7 @@ read_c3d_one <- function(mrn_in, tt){
         Rxn[[kk]] <- extract_data(c, typestr = "Reaction")
       }
       
-      # If there is data then reshape to long format. Otherwise, next -----
+      # If there is data then reshape to long format -----
       if(nrow(Ang[[kk]]) > 0) Ang[[kk]] <- 
         make_long(Ang[[kk]], kk, "Angle", TrialInfo)
       
@@ -115,24 +118,21 @@ read_c3d_one <- function(mrn_in, tt){
         Rxn[[kk]] <- make_long(Rxn[[kk]], kk, "Reaction", TrialInfo)
       }
       
-      # If it's a C3D file
     }  else {
+      # If file is a GCD file we jump to here
       g <- ReadGCD(TrialInfo, kk)
-      
       Ang[[kk]] <- g$ang
       Mom[[kk]] <- g$mom
       Pwr[[kk]] <- g$pwr
       Rxn[[kk]] <- g$rxn
       Trk[[kk]] <- tibble()
       Len[[kk]] <- tibble()
-
   }
-    
     # Update time extracted -----
     TrialInfo$t_extracted[kk] <- now()
 }   # End of file reading loop
   
-  # Name the list elements by patientid, examid, and trial
+  # Name the list elements by patientid, examid, and trial -----
   names(Ang) <- glue("MRN.{mrn_in}.Exam_ID.{TrialInfo$Exam_ID}.Trial.{TrialInfo$Trial_Num}")
   names(Mom) <- glue("MRN.{mrn_in}.Exam_ID.{TrialInfo$Exam_ID}.Trial.{TrialInfo$Trial_Num}")
   names(Pwr) <- glue("MRN.{mrn_in}.Exam_ID.{TrialInfo$Exam_ID}.Trial.{TrialInfo$Trial_Num}")
@@ -142,7 +142,6 @@ read_c3d_one <- function(mrn_in, tt){
   
   # Compute Exam Averages -----  
   source("SCRIPTS/examavg.R")
-  
   exlist <- unique(TrialInfo$Exam_ID)
   Ang_avg <- map(.x = exlist, ~ examavg(D = Ang, TrialInfo, id = .x))
   Mom_avg <- map(.x = exlist, ~ examavg(D = Mom, TrialInfo, id = .x))
@@ -161,6 +160,8 @@ read_c3d_one <- function(mrn_in, tt){
   
   # Compute statistics -----
   # Stretchwrap every new Exam_ID -----
+  # This is done to ensure that all sub-phases of the gait cycle have the same number of points
+  # Which, in turn, allows us to vectorize the statistics calculations
   samp <- 1:length(Ang_avg)
   angdat <- map(.x = samp, ~ stretchwrap(Ang_avg[[.x]], d = 0)) %>% list_cbind()
   momdat <- map(.x = samp, ~ stretchwrap(Mom_avg[[.x]], d = 0)) %>% list_cbind()
@@ -168,7 +169,7 @@ read_c3d_one <- function(mrn_in, tt){
   rxndat <- map(.x = samp, ~ stretchwrap(Rxn_avg[[.x]], d = 0)) %>% list_cbind()
   lendat <- map(.x = samp, ~ stretchwrap(Len_avg[[.x]], d = 0)) %>% list_cbind()
   trkdat <- map(.x = samp, ~ stretchwrap(Trk_avg[[.x]], d = 0)) %>% list_cbind()
-  # Get lengthening rate. Note d = 1 takes analytic spline derivative -----
+  # Get lengthening rate (so-called "velocity") Note d = 1 takes analytic spline derivative -----
   veldat <- map(.x = samp, ~ stretchwrap(Len_avg[[.x]], d = 1)) %>% list_cbind()
 
   # Compute statistics -----
@@ -181,6 +182,7 @@ read_c3d_one <- function(mrn_in, tt){
   Vel_stats <- allstats(veldat)
 
   # Lengthening rate ("vel") stats need to be scaled by steplength/speed -----
+  if(!is.null(Len_stats)){
   scaledat <-
     Len_avg %>%
     list_rbind() %>%
@@ -195,6 +197,9 @@ read_c3d_one <- function(mrn_in, tt){
     left_join(scaledat) %>%
     mutate(value = value * vscale) %>%
     select(-vscale)
+  } else {
+    Vel_stats <- NULL
+  }
   
   # Function to automatically name list elements -----
   listN <- function(...){

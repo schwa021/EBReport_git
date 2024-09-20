@@ -1,14 +1,16 @@
+# This function reads in the variable labels and returns a tibble with the variable labels and directions
+# Naming of gait variables is automatic based on the variable name
+
 get_varlabs <- function(){
   # Get labels
-  varlabs <- read_csv(
-    "C:/Users/mschwartz/OneDrive - Gillette Children's Specialty Healthcare/R RFMP/R RFMP/RFMP_all/DATA/variable_labels.csv"
-  )
+  varlabs <- read_csv("DATA/variable_labels.csv")
   
   # Fix gait data labels
-  gvar <- str_subset(varlabs$Variable, "^ic|^fo|^ofo|^ofc|^mean|^min|^max|^t_|^mids")
+  gvar <- str_subset(varlabs$Variable, "^rom|^ic|^fo|^ofo|^ofc|^mean|^min|^max|^t_|^mids")
   
   gvarlab <- 
     gvar %>%
+    str_replace("^rom", "ROM") %>%
     str_replace("^t", "Time of") %>% 
     str_replace("^ofo", "Opposite Foot Off") %>% 
     str_replace("^ofc", "Opposite Foot Contact") %>% 

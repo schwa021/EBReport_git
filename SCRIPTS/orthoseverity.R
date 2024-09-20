@@ -1,7 +1,7 @@
-orthoseverity <- function(x, a, s){
+orthoseverity <- function(x, ptage, ptsex){
   
   # round age to closest 3 -----
-  a <- 3 * round(a/3)
+  ptage <- 3 * round(ptage/3)
   
   # Get age-based mean -----
   dd <- readxl::read_xlsx("DATA/development_curves.xlsx")
@@ -10,9 +10,9 @@ orthoseverity <- function(x, a, s){
     pivot_longer(-c(vbl, sex, age), names_to = c("pct")) |> 
     mutate(name = vlabs[vbl]) |> 
     filter(
-      age == a,
+      age == ptage,
       pct == "pct50",
-      sex == s
+      sex == ptsex
       )
   
   orthotdmean <- c(
