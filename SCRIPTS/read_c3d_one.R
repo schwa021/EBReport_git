@@ -86,8 +86,10 @@ read_c3d_one <- function(mrn_in, tt){
     if(str_detect(TrialInfo$Filename[kk], "c3d|C3d|C3D")){ 
       
       # Read in C3D file using Bruce MacWilliams' ReadC3D function
+      # Temp fix after IS fucked us over with path name change (str_replace)
+      temppath <- str_replace(TrialInfo$Filename[kk], "faplocal", "gcfiles")
       c <- tryCatch(
-        ReadC3D(C3DFileName = TrialInfo$Filename[kk], MarkerDataFormat = "wide"),
+        ReadC3D(C3DFileName = temppath, MarkerDataFormat = "wide"),
         error = function(e) NULL
       )
       if(is.null(c) | is.null(c$Header)) next

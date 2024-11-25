@@ -87,11 +87,20 @@ get_patient_info <- function(xpt, deid) {
     select(Problem_Type, Problem) |> 
     group_by(Problem_Type)
   
+  # Check for no problems
+  if(sum(!is.na(probdat$Problem)) == 0){
+    probdat <- tibble(Problem_Type = "No Problems Listed", Problem = "")
+  }
+  
   birthtit <- glue("Gestation = {birthdat$Delivery_Weeks} wks, Weight = {birthdat$birthpound}lb {birthdat$birthoz}oz, NICU = {birthdat$NICU_Weeks} wks, Ventilator = {birthdat$Ventilator_Weeks} wks")
   
   tbirth <- 
     probdat |> 
     gt() |> 
+    sub_missing(
+      columns = everything(),
+      missing_text = ""
+    ) |>
     tab_header(
       title = "Birth History",
       subtitle = birthtit

@@ -26,7 +26,7 @@ knitr:
   opts_chunk:
     warning: false
     message: false
-    cache.lazy: false
+    cache.lazy: true
     screenshot.force: true
     fig.path: FIGURES/
 html-table-processing: none
@@ -38,10 +38,10 @@ execute:
   error: false
     
 params:
-  # MRN: 606085
-  MRN: 681343
-  # Event_Date: "2018-06-21"
-  Event_Date: "2024-04-29"
+  MRN: 606085
+  # MRN: 620530
+  Event_Date: "2018-06-21"
+  # Event_Date: "2024-10-29"
   deid: FALSE
   usevideo: TRUE
   usegait: TRUE
@@ -125,6 +125,9 @@ theme_mhs <- function(bs){
 }
 theme_set(theme_mhs(7))
 
+# List of surgeries -----
+surglist <- c("Femoral_Derotation_Osteotomy", "Tibial_Derotation_Osteotomy", "Psoas_Release", "Hams_Lengthening", "Adductor_Release", "Gastroc_Soleus_Lengthening", "DFEO_Patellar_Advance", "Patellar_Advance", "Foot_and_Ankle_Bone", "Foot_and_Ankle_Soft_Tissue","Neural_Rhizotomy", "Rectus_Transfer")
+
 # For trimming white space around figures -----
 knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
 ```
@@ -137,15 +140,7 @@ knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
 tdavg <- get_TD_NEW()
 
 # Get labels (variable, and pos/neg directions) -----
-varlabs <- get_varlabs()
-vlabs <- varlabs$Label
-names(vlabs) <- varlabs$Variable 
-xlabs <- names(vlabs)
-names(xlabs) <- vlabs
-neglabs <- varlabs$negdir
-names(neglabs) <- varlabs$Variable
-poslabs <- varlabs$posdir
-names(poslabs) <- varlabs$Variable
+list2env(get_varlabs(), envir = .GlobalEnv)
 
 # Read outcome setup containing outcome choices for each surgery -----
 if(params$custom_outcome){
@@ -201,39 +196,44 @@ datpre <- readRDS("DATA/FD_2024-05-25.RDS")
 datpre <- read_and_organize(datpre)
 datpre <- get_meanscores(datpre, "Pre")
 datpre <- get_O2_Z(datpre)
+
 ```
 
 ```{r}
 #| label: load-or-build-propensity-models
 #| include: false
 
-# List of surgeries -----
-surglist <- c("Femoral_Derotation_Osteotomy", "Tibial_Derotation_Osteotomy", "Psoas_Release", "Hams_Lengthening", "Adductor_Release", "Gastroc_Soleus_Lengthening", "DFEO_Patellar_Advance", "Patellar_Advance", "Foot_and_Ankle_Bone", "Foot_and_Ankle_Soft_Tissue","Neural_Rhizotomy", "Rectus_Transfer")
-
 # Loop over list -----
 for (s in surglist) {
   if(file.exists(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))){
     # Comment above ^^^ and Uncomment below vvv to re-run all propensity models
     # if(FALSE){
-    # Load model
     load(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))
     assign(glue("mod_{s}"), slist[[1]])
     assign(glue("opt_{s}"), slist[[2]])
-    mod <- get(glue("mod_{s}"))
+    load(glue("OUTPUT/Propensity_Models/prop_{s}_nogait.RDATA"))
+    assign(glue("mod_{s}_nogait"), slist[[1]])
+    assign(glue("opt_{s}_nogait"), slist[[2]])
   } else {
-    # Build model
+    # Set usegait to build with (TRUE) or without (FALSE) gait data -----
+    usegait = FALSE
     surg <- glue("interval_{s}")
-    res <- build_propensity_mod(s, dat, fp2fn=1)
+    res <- build_propensity_mod(s, dat, fp2fn=1, usegait)
+    assign(glue("res_{s}"), res)
     mod <- res$mod
     opt <- res$opt
     metrics <- res$metrics
-    # Save model
     slist <- list(mod, opt)
     names(slist) <- c(glue("mod_{s}"), glue("opt_{s}"))
-    fmod <- glue("OUTPUT/Propensity_Models/prop_{s}.RDATA")
+    if(usegait){
+      fmod <- glue("OUTPUT/Propensity_Models/prop_{s}.RDATA")
+    } else {
+      fmod <- glue("OUTPUT/Propensity_Models/prop_{s}_nogait.RDATA")
+    }
     save(slist, file = fmod)
   }
 }
+
 ```
 
 ```{r}
@@ -247,10 +247,14 @@ if(is.null(dat$p_Femoral_Derotation_Osteotomy)){
     mod <- get(glue("mod_{s}"))
     set.seed(42)
     dat[[glue("p_{s}")]] <- predict(mod, dat[names(mod$X)])
+    mod <- get(glue("mod_{s}_nogait"))
+    set.seed(42)
+    dat[[glue("p_{s}_nogait")]] <- predict(mod, dat[names(mod$X)])
   }
   saveRDS(dat, glue("DATA/preprocessed_data_{as.Date(now())}.RDS"))
   saveRDS(dat, glue("DATA/preprocessed_data_current.RDS"))
 }
+
 ```
 
 ```{r}
@@ -276,6 +280,12 @@ if(params$usegait){
 }
 
 # Build patient FD and FDpp data -----
+# If there is ONLY afo data, use that -----
+if(is.null(datc3d) & !is.null(datc3d_afo)){
+  datc3d <- datc3d_afo
+  afoonly <- TRUE
+  plotgait <- TRUE
+}
 fd <- make_FD_one(datc3d, params$MRN)
 
 # Restrict to Current date and before (useful for processing old studies) -----
@@ -321,6 +331,10 @@ if(!params$deid){
   ptdate <- format(as.Date(params$Event_Date), "%b %Y")
   ptmrn <- xpt$Exam_ID[1]
 }
+
+# Save xpt with params$MRN and params$Event_Date in name -----
+saveRDS(xpt, glue("EBData_{params$MRN}_{params$Event_Date}.RDS"))
+
 ```
 
 ## `r glue("{ptname}<br>{ptmrn}<br>{ptdate}")`
@@ -344,12 +358,14 @@ if(!params$deid){
 tdat <- 
   xpt |> 
   filter(SIDE == "L") |> 
-  select(age, dx, dxmod, dxside, GMFCS, FAQ) |> 
+  select(age, dx, dxmod, dxside, GMFCS_meas, FAQ) |> 
   mutate(age = round(age,1)) |> 
   rename_with(
     .fn = ~ vlabs[.],
     .cols = everything()
-  )
+  ) %>% 
+  rename("GMFCS" = "GMFCS (measured)")
+
 
 ptsumm <- 
   tdat |> 
@@ -374,6 +390,7 @@ ptsumm
 if(params$figsave){
   gtsave(ptsumm, "FIGURES/Patient_Summary.png")
 }
+
 ```
 
 ### Patient History
@@ -384,6 +401,7 @@ if(params$figsave){
 
 source("SCRIPTS/get_patient_info.R")
 pi <- get_patient_info(xpt, params$deid) 
+
 ```
 
 ::: {.panel-tabset .nav-pills}
@@ -395,6 +413,7 @@ pi$tbirth
 if(params$figsave){
   gtsave(pi$tbirth, "FIGURES/Birth_History.png")
 }
+
 ```
 
 #### Gait
@@ -405,6 +424,7 @@ pi$tdev
 if(params$figsave){
   gtsave(pi$tdev, "FIGURES/Gait_Development.png")
 }
+
 ```
 
 #### Treatment
@@ -415,6 +435,7 @@ if(!is.null(pi$tsurg)) pi$tsurg
 if(params$figsave){
   gtsave(pi$tsurg, "FIGURES/Treatment_History.png", expand = c(0, 40, 50, 0))
 }
+
 ```
 :::
 
@@ -439,6 +460,7 @@ if(!is.null(t_goal)) t_goal
 if(params$figsave & !is.null(t_goal)){
   gtsave(t_goal, "FIGURES/GOAL_Summary.png")
 }
+
 ```
 
 #### Very Important GOALs
@@ -463,6 +485,7 @@ if(!is.null(t_imp)) t_imp
 if(params$figsave & !is.null(t_imp)){
   gtsave(t_imp, "FIGURES/GOAL_Importance.png", expand = c(0, 40, 50, 0))
 }
+
 ```
 
 #### GOAL History
@@ -477,6 +500,7 @@ v <- c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility",
 cap = ""
 p <- plot_development(fd, dat, v, v, cap, devdat)
 p
+
 ```
 :::
 :::
@@ -530,6 +554,7 @@ if(!params$deid & !(all(vidlist %in% temp))){
   compfun(temp, vidlist, vidlabs)
   vidname <- vidlist
 }
+
 ```
 
 ```{r}
@@ -545,15 +570,20 @@ if(!params$deid & !(all(vidlist %in% temp))){
 #   <source src=", vidlist[kk], " type=video/mp4>
 #   </video> \n\n")
 # }
+
 ```
 
 ```{r}
 #| label: generate-html-video-code
 #| cache: false
 
+# If deidentified, fix mkr file name -----
+# TODO
+
 # Generate the code for the video tabs -----
 source("SCRIPTS/build_video_tabs.R")
 build_video_tabs(vidlist, vidfile)
+
 ```
 
 ```{r}
@@ -567,6 +597,7 @@ build_video_tabs(vidlist, vidfile)
 code <- readLines("video_tab_code.txt")
 code <- paste(code, collapse = "\n")
 cat(paste0("```{=html}\n", code, "\n```"))
+
 ```
 
 ## Treatment Assignment
@@ -591,16 +622,24 @@ vx <- names(xpt)
 vadd <- vall[!(vall %in% vx)]
 xpt[vadd] <- NA
 
+usegait <- params$usegait
 post <- list()
 for (s in surglist) {
-  mod <- get(glue("mod_{s}"))
   set.seed(42)
-  xpt[glue("p_{s}")] <- predict(mod, xpt[names(mod$X)])
-  post[[s]] <- bart_machine_get_posterior(mod, xpt[names(mod$X)])
+  if(usegait){
+    mod <- get(glue("mod_{s}"))
+    xpt[glue("p_{s}")] <- predict(mod, xpt[names(mod$X)])
+    post[[s]] <- bart_machine_get_posterior(mod, xpt[names(mod$X)])
+  } else {
+    mod <- get(glue("mod_{s}_nogait"))
+    xpt[glue("p_{s}")] <- predict(mod, xpt[names(mod$X)])
+    post[[s]] <- bart_machine_get_posterior(mod, xpt[names(mod$X)])
+  }
 }
 
 xL <- xpt |> filter(SIDE == "L")
 xR <- xpt |> filter(SIDE == "R")
+
 ```
 
 ```{r}
@@ -619,6 +658,7 @@ proptbl
 if(params$figsave){
   gtsave(proptbl, "FIGURES/Propensity_Profile.png", expand = c(10, 10, 10, 10))
 }
+
 ```
 
 ```{r}
@@ -627,12 +667,20 @@ if(params$figsave){
 #| cache: false
 
 # Build detail tables for each surgery using Shapley values -----
+usegait <- params$usegait
 tall <- list()
 for (s in surglist) {
-  mod <- get(glue("mod_{s}"))
-  res <- prop_shap_table(df=dat, sname=s, mod, x=xpt, varlabs)
-  tall[[s]] <- res
+  if(usegait){
+    mod <- get(glue("mod_{s}"))
+    res <- prop_shap_table(df=dat, sname=s, mod, x=xpt, varlabs)
+    tall[[s]] <- res
+  } else {
+    mod <- get(glue("mod_{s}_nogait"))
+    res <- prop_shap_table(df=dat, sname=s, mod, x=xpt, varlabs)
+    tall[[s]] <- res 
+  }
 }
+
 ```
 
 ```{r}
@@ -644,6 +692,7 @@ tLR <- list()
 for (s in surglist) {
   tLR[[s]] <- fmt_shapLR(tall, ptprops, s)
 }
+
 ```
 
 ### Clinical Reasoning
@@ -665,6 +714,7 @@ for (kk in 1:length(tLR)) {
     gtsave(tLR[[kk]], glue("FIGURES/Clin_Reasoning_{surglist[kk]}.png"), expand = c(10, 40, 10, 00))
   }
 }
+
 ```
 :::
 
@@ -672,21 +722,22 @@ for (kk in 1:length(tLR)) {
 #| label: build-all-outcome-models
 #| eval: false
 
-# This is the initial code to build the outcome prediction models -----
+# This is the code to build the outcome prediction models -----
 # Builds models for all default outcomes - Need to update with a  "master list"
 # Should run this if models or test data change. Default is eval: FALSE
 
 # source("SCRIPTS/build_pred_outcome_BART.R")
-
-# Get all outcome variables -----
+# 
+# # Get all outcome variables -----
 # v <- vector()
 # for (ss in surglist) {
 #   v <- c(v, get_outcome_vars(ss))
 # }
 # v <- unique(v)
-
-# Compute Models -----
-# bartlist <- v %>% map(\(v) build_pred_outcome_BART(dat, v), .progress = TRUE)
+# 
+# # Compute Models -----
+# usegait = TRUE
+# bartlist <- v %>% map(\(v) build_pred_outcome_BART(dat, v, usegait), .progress = TRUE)
 # names(bartlist) <- v
 
 # Save bartlist into data
@@ -706,6 +757,7 @@ for (kk in 1:length(tLR)) {
 
 source("SCRIPTS/build_pred_outcome_BART.R")
 bartlist <- readRDS("DATA/outcome_models_bartlist.RDS")
+bartlist_nogait <- readRDS("DATA/outcome_models_bartlist_nogait.RDS")
 
 # Find chosen for surgery s -----
 # v <- 
@@ -740,10 +792,17 @@ for (v in names(bartlist)) {
   xpt[vadd] <- NA
 }
 
+usegait <- params$usegait
+if(usegait){
+  bartlist_pred <- readRDS("DATA/outcome_models_bartlist.RDS")
+} else {
+  bartlist_pred <- readRDS("DATA/outcome_models_bartlist_nogait.RDS")
+}
+
 # Predict outcomes all surgery x all variables -----
 out_all <-
   surglist %>% 
-  map(\(s) pred_outcome_by_bart(xx=xpt, surglist, s, bartlist, vlabs))
+  map(\(s) pred_outcome_by_bart(xx=xpt, surglist, s, bartlist_pred, vlabs))
 names(out_all) <- surglist
 
 temp <- list()

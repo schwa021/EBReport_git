@@ -82,7 +82,7 @@ get_prop_model_vars <- function(s){
   
   if(s == "Rectus_Transfer") prop_vars <- 
       c("RECT_FEM_SPAS",
-        "maxswi_Kne_Ang_Sag", "ic_Kne_Ang_Sag", "romswi_Kne_Ang_Sag",
+        "maxswi_Kne_Ang_Sag", "fo_Kne_Ang_Sag", "ic_Kne_Ang_Sag", "romswi_Kne_Ang_Sag",
         "prior_Rectus_Transfer", "prior_Neural_Rhizotomy")
   
   
@@ -101,7 +101,7 @@ get_prop_model_vars <- function(s){
         "meansta_Foo_Ang_Trn", "meanswi_Foo_Ang_Trn",
         "prior_Foot_and_Ankle_Bone", "prior_Foot_and_Ankle_Soft_Tissue")
   
-  prop_vars <- c("age", "affected", "dx", "era", prop_vars)
+  prop_vars <- c("age", "GMFCS", "affected", "dx", "era", prop_vars)
   
   return(prop_vars)
   

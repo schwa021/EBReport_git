@@ -1,8 +1,8 @@
 # This function builds a propensity model using the BART algorithm and evaluates it on test data.
-# s is the surgery of interest, dat is the dataset, and fp2fn is the cost of a false positive relative to a false negative.
+# s is the surgery of interest, df is the dataset, and fp2fn is the cost of a false positive relative to a false negative.
 # The function returns a list containing the model, the optimal test metrics, and the metrics at each threshold.
 
-build_propensity_mod <- function(s, dat, fp2fn=1){
+build_propensity_mod <- function(s, df, fp2fn=1, usegait=TRUE){
   
   # This function gets the diagnostic metrics at a given probability threshold -----
   # getres <- function(metrics, prob){
@@ -40,12 +40,37 @@ build_propensity_mod <- function(s, dat, fp2fn=1){
   prop_vars <- get_prop_model_vars(s)
   surg <- glue("interval_{s}")
   
+  
+  ################################################
+  # TEST CODE - remove gait variables      
+  prop_vars_nogait <- 
+    prop_vars %>% 
+    str_subset(
+      regex("^ic|^fo|^ofo|^ofc|^mean|^min|^max|^rom|^mid|^t_|DMC|GDI", ignore_case=FALSE), 
+      negate = TRUE
+    )
+  
+  if(!usegait){
+    prop_vars <- prop_vars_nogait
+  }
+  ################################################
+  
+  
+  # If dx does not equal "Cerebral palsy" set GMFCS to missing -----
+  df <- 
+    df %>% 
+    mutate(GMFCS = case_when(
+      dx != "Cerebral palsy" ~ "Missing",
+      TRUE ~ as.character(GMFCS)
+    )) %>%
+    mutate(GMFCS = factor(GMFCS, levels = c("I", "II", "III", "IV", "V", "Missing")))
+  
   # Define training and testing sets -----
   set.seed(42)
-  ex <- unique(dat$Exam_ID)
+  ex <- unique(df$Exam_ID)
   extrain <- sample(ex, size = round(.7 * length(ex)))
-  dtrain <- dat |> filter(Exam_ID %in% extrain)
-  dtest <- dat |> filter(!(Exam_ID) %in% extrain)
+  dtrain <- df |> filter(Exam_ID %in% extrain)
+  dtest <- df |> filter(!(Exam_ID) %in% extrain)
   
   # Get balanced dataset for training -----
   ncase <- table(dtrain[[surg]])["1"]
@@ -61,7 +86,15 @@ build_propensity_mod <- function(s, dat, fp2fn=1){
   
   # Train model -----
   mod <-
-    bartMachine(xtrainbal, ytrainbal, use_missing_data = T, serialize = T, seed = 42, use_missing_data_dummies_as_covars = T)
+    bartMachine(
+      xtrainbal,
+      ytrainbal,
+      use_missing_data = T,
+      serialize = T,
+      seed = 42,
+      use_missing_data_dummies_as_covars = T
+      # cov_prior_vec = cov_prior_vec
+    )
   
   # Evaluate model on test data -----
   ytest_prob <- predict(mod, new_data = xtest)

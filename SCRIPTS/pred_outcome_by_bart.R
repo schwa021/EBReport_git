@@ -78,29 +78,13 @@ pred_outcome_by_bart <- function(xx, surglist, s, bartlist, vlabs) {
       }
       
       p_thresh_L <- p_thresh_side(vv, xx, "L")
-      # thresh_lab_L <- thresh_lab_side(vv, xx, "L") 
       thresh_lab_L <- thresh_lab_side2(vv, posttau, "L") 
       p_thresh_R <- p_thresh_side(vv, xx, "R")
-      # thresh_lab_R <- thresh_lab_side(vv, xx, "R")
       thresh_lab_R <- thresh_lab_side2(vv, posttau, "R")
       
       p_thresh <- c(p_thresh_L, p_thresh_R)
       thresh_lab <- c(thresh_lab_L, thresh_lab_R)
-      
-      # Organize results -----
-      # pred <- 
-      #   tibble(
-      #     surgname = s,
-      #     side = c("L", "R", "L", "R"),
-      #     surg = c("Control", "Control", "Treated", "Treated"),
-      #     var =  vv,
-      #     D = c(DL, DR, DL, DR),
-      #     tau_gt_thresh = rep(p_thresh, 2),
-      #     tau_gt_label = rep(thresh_lab, 2)
-      #   ) %>% 
-      #   bind_cols(q) %>% 
-      #   arrange(side)
-      
+
       # Organize results with tau -----
       pred <- 
         tibble(

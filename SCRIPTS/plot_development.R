@@ -106,11 +106,11 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
     mutate(name = factor(name), levels = levels(pdat))
   
   # Set conditional age limits for plotting (25 or pt age) -----
-  xmax <- ifelse(max(pdat$age) > 25, Inf, 25)
+  xmax <- ifelse(max(pdat$age) > 25, ceil(max(pdat$age)), 25)
   
   # Make Plot -----
   p <-
-    ggplot(pdat, aes(x = age, y = value, color = SIDE)) +
+    ggplot(pdat, aes(x = age, y = as.numeric(value), color = SIDE)) +
     
     #TD
     geom_ribbon(
@@ -121,6 +121,7 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
       color = NA,
       alpha = .2
     ) +
+    facet_wrap(~ name, scales = "free_y") +
     geom_line(
       data = dd,
       aes(y=pct50),
@@ -133,7 +134,6 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
     geom_point(size = 1.45) +
     geom_point(data = dlims) +
     
-    facet_wrap(~ name, scales = "free_y") +
     coord_cartesian(xlim = c(2, xmax), clip = "off") +
     scale_color_discrete_qualitative(
       palette = "Dark 3",

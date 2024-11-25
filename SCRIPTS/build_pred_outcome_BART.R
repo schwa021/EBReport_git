@@ -1,7 +1,7 @@
 # Build BART outcome prediction models
 
 # Function to build model and return model + stuff -----
-build_pred_outcome_BART <- function(dat, vv){
+build_pred_outcome_BART <- function(dat, vv, usegait=TRUE){
   # Function to split data -----
   fsplit <- function(dat, ix, pred_vars, outvar){
     outvarPost <- glue("{outvar}Post")
@@ -19,6 +19,21 @@ build_pred_outcome_BART <- function(dat, vv){
   predvars <- get_pred_model_vars(vv)
   predvars <- c("age", "GMFCS", predvars, glue("interval_{surglist}"))
   predvars <- unique(predvars)
+  
+  
+  ################################################
+  # TEST CODE - remove gait variables      
+  predvars_nogait <- 
+    predvars %>% 
+    str_subset(
+      regex("^ic|^fo|^ofo|^ofc|^mean|^min|^max|^rom|^mid|^t_|DMC|GDI", ignore_case=FALSE), 
+      negate = TRUE
+    )
+  
+  if(!usegait){
+    predvars <-predvars_nogait
+  }
+  ################################################
   
   # Split into training and testing -----
   set.seed(42)

@@ -108,8 +108,14 @@ get_varlabs <- function(){
       )
     )
   
-  # Moment: TODO
+  vlabs <- varlabs$Label
+  names(vlabs) <- varlabs$Variable 
+  xlabs <- names(vlabs)
+  names(xlabs) <- vlabs
+  neglabs <- varlabs$negdir
+  names(neglabs) <- varlabs$Variable
+  poslabs <- varlabs$posdir
+  names(poslabs) <- varlabs$Variable
   
-  
-  return(varlabs)
+  return(list(varlabs=varlabs, vlabs=vlabs, xlabs=xlabs, neglabs=neglabs, poslabs=poslabs))
 }
