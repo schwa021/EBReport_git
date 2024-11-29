@@ -4,7 +4,7 @@
 .Ruserdata
 
 DATA/
-OUTPUT/
+REPORTS/
 VIDEO/
 FIGURES/
 ARCHIVE/
@@ -14,18 +14,17 @@ junk*
 *.mp4
 EB*.RDS
 
-
-EBReport_*.html
+EB*.html
 *.png
-EBReport.html
 FAQT*
 test*
 Test*
 Junk*
+junk*
 Add_Video*
 Video_Tabs*
 video_tab_code.txt
 Temp*
-video_tab_code.txt
+temp*
 
 

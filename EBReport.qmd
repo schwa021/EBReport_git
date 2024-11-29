@@ -130,6 +130,7 @@ surglist <- c("Femoral_Derotation_Osteotomy", "Tibial_Derotation_Osteotomy", "Ps
 
 # For trimming white space around figures -----
 knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
+
 ```
 
 ```{r}
@@ -157,6 +158,7 @@ outcome_setup <-
     out4 = xlabs[out4]
   ) %>% 
   pivot_longer(-surg)
+
 ```
 
 ```{r}
@@ -169,6 +171,7 @@ devdat <-
   dd |> 
   pivot_longer(-c(vbl, sex, age), names_to = c("pct")) |> 
   mutate(name = vlabs[vbl])
+
 ```
 
 ```{r}
