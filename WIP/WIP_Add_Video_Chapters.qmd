@@ -1,0 +1,94 @@
+---
+title: "Video with Chapters"
+format: html
+---
+
+```{r}
+#| echo: false
+library(jsonlite)
+
+# Read the .mkr file
+mkr_lines <- readLines("testvid1.mkr")
+
+# Extract marker data (LABEL, START, END)
+extract_markers <- function(lines) {
+  markers <- grep("<MARKER", lines, value = TRUE)
+  marker_data <- lapply(markers, function(line) {
+    label <- sub('.*LABEL="([^"]+)".*', "\\1", line)
+    start <- sub('.*START="([^"]+)".*', "\\1", line)
+    end <- sub('.*END="([^"]+)".*', "\\1", line)
+    return(list(label = label, start = as.numeric(start), end = as.numeric(end)))
+  })
+  return(marker_data)
+}
+
+# Get marker data from the file
+markers <- extract_markers(mkr_lines)
+
+# Generate HTML content with data attributes
+markers_html <- paste0(
+  sapply(seq_along(markers), function(i) {
+    marker <- markers[[i]]
+    sprintf(
+      '<button data-label="%s" data-start="%f" data-end="%f">%s</button>', 
+      marker$label, marker$start, marker$end, marker$label
+    )
+  }),
+  collapse = ' '
+)
+
+```
+
+```{=html}
+<video id="my-video" controls width="800" height="450">
+    <source src="testvid1.mp4" type="video/mp4">
+</video>
+
+<div id="chapter-list">
+    <!-- The R-generated HTML content will be inserted here -->
+    ```{r, results='asis', echo=FALSE}
+    cat(markers_html)
+    ```
+</div>
+
+<style>
+    /* Style for the chapter buttons */
+    #chapter-list button {
+        font-size: 12px; /* Smaller font size */
+        border: 1px solid #ccc; /* Border color */
+        border-radius: 7px; /* Rounded corners */
+        padding: 5px 5px; /* Padding for button size */
+        margin: 4px; /* Space between buttons */
+        background-color: #f0f2f4; /* Light background color */
+        box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2); /* Embossed look */
+        cursor: pointer; /* Pointer cursor on hover */
+        transition: background-color 0.3s, box-shadow 0.3s; /* Smooth transition for hover effects */
+    }
+    
+    #chapter-list button:hover {
+        background-color: #e2e6ea; /* Slightly darker background on hover */
+        box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3); /* Enhanced embossed effect on hover */
+    }
+    
+    #chapter-list button:focus {
+        outline: none; /* Remove default focus outline */
+        border-color: #007bff; /* Change border color on focus */
+    }
+</style>
+
+<script>
+    const video = document.getElementById('my-video');
+    const chapterList = document.getElementById('chapter-list');
+
+    // Add event listeners to buttons
+    chapterList.querySelectorAll('button').forEach(button => {
+        button.addEventListener('click', () => {
+            const start = parseFloat(button.getAttribute('data-start'));
+            video.currentTime = start;
+            video.play();
+        });
+    });
+</script>
+
+```
+
