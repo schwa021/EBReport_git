@@ -38,10 +38,10 @@ execute:
   error: false
     
 params:
-  MRN: 606085
-  # MRN: 620530
-  Event_Date: "2018-06-21"
-  # Event_Date: "2024-10-29"
+  # MRN: 606085
+  MRN: 485602
+  # Event_Date: "2018-06-21"
+  Event_Date: "2024-12-18"
   deid: FALSE
   usevideo: TRUE
   usegait: TRUE
@@ -335,9 +335,6 @@ if(!params$deid){
   ptmrn <- xpt$Exam_ID[1]
 }
 
-# Save xpt with params$MRN and params$Event_Date in name -----
-saveRDS(xpt, glue("EBData_{params$MRN}_{params$Event_Date}.RDS"))
-
 ```
 
 ## `r glue("{ptname}<br>{ptmrn}<br>{ptdate}")`
@@ -359,7 +356,7 @@ if(!params$deid){
 
 # Build patient summary data -----
 tdat <- 
-  xpt |> 
+  xpt %>%  
   filter(SIDE == "L") |> 
   select(age, dx, dxmod, dxside, GMFCS_meas, FAQ) |> 
   mutate(age = round(age,1)) |> 
@@ -516,20 +513,7 @@ p
 #| include: false
 #| cache: false
 
-# This function compresses videos using ffmpeg -----
-compfun <- function(temp, vidlist, vidlabs){
-  # Remove old videos.....
-  unlink(temp)
-  # Compress all videos.....
-  vidname <- vector()
-  for (kk in 1:length(vidlist)) {
-    curr.vid <- vidfile[kk]
-    vidname[kk] <- glue("{vidlabs[[kk]]}.mp4")
-    ffmpeg_command <-
-      paste("ffmpeg -i", curr.vid, "-c:v libx264 -crf 20", vidname[kk])
-    system(ffmpeg_command)
-  }  
-}
+source("SCRIPTS/compress_video.R")
 
 # Generate list of all videos -----
 temp <- fd$FD %>% arrange(rev(age))
@@ -546,15 +530,15 @@ vidfile <- temp %>% filter(SIDE == "L") %>% pull(Video_File)
 temp <- list.files(pattern = ".mp4$")
 
 # Use Deidentified video if appropriate -----
-# Deidentified videos created separetly and stored in VIDEO/MRN/
+# Deidentified videos created seperately and stored in VIDEO/MRN/
 if(params$deid & params$usevideo){
   res <- str_extract(vidfile, "[^\\\\]+$")
   vidfile <- glue("VIDEO/{params$MRN}/{res}")
-  compfun(temp, vidlist, vidlabs)
+  compress_video(temp, vidlist, vidlabs)
 }
 
 if(!params$deid & !(all(vidlist %in% temp))){
-  compfun(temp, vidlist, vidlabs)
+  compress_video(temp, vidlist, vidlabs)
   vidname <- vidlist
 }
 
@@ -671,16 +655,16 @@ if(params$figsave){
 
 # Build detail tables for each surgery using Shapley values -----
 usegait <- params$usegait
-tall <- list()
+shap_all <- list()
 for (s in surglist) {
   if(usegait){
     mod <- get(glue("mod_{s}"))
     res <- prop_shap_table(df=dat, sname=s, mod, x=xpt, varlabs)
-    tall[[s]] <- res
+    shap_all[[s]] <- res
   } else {
     mod <- get(glue("mod_{s}_nogait"))
     res <- prop_shap_table(df=dat, sname=s, mod, x=xpt, varlabs)
-    tall[[s]] <- res 
+    shap_all[[s]] <- res 
   }
 }
 
@@ -691,9 +675,9 @@ for (s in surglist) {
 #| cache: false
 
 ptprops <- bind_rows(propL, propR)
-tLR <- list()
+shap_tables <- list()
 for (s in surglist) {
-  tLR[[s]] <- fmt_shapLR(tall, ptprops, s)
+  shap_tables[[s]] <- fmt_shapLR(shap_all, ptprops, s)
 }
 
 ```
@@ -707,14 +691,14 @@ Clinical factors underlying the historical practice standard, arranged from larg
 #| label: display-propensity-details
 #| results: asis
 
-for (kk in 1:length(tLR)) {
+for (kk in 1:length(shap_tables)) {
   cat("####", str_replace_all(surglist[kk], "_", " "), "\n\n")
-  print(tLR[[kk]])
+  print(shap_tables[[kk]])
   cat("\n\n")
   
   # Save for external use -----
   if(params$figsave){
-    gtsave(tLR[[kk]], glue("FIGURES/Clin_Reasoning_{surglist[kk]}.png"), expand = c(10, 40, 10, 00))
+    gtsave(shap_tables[[kk]], glue("FIGURES/Clin_Reasoning_{surglist[kk]}.png"), expand = c(10, 40, 10, 00))
   }
 }
 
@@ -749,12 +733,12 @@ for (kk in 1:length(tLR)) {
 
 ```{r}
 #| label: add-outcome-models-if-needed
-#| eval: true
+#| eval: false
 
 # This code chunk checks if a new outcome model is needed -----
 # New outcome models can also be added manually
 #   (1) Add predictors to SCRIPTS/get_pred_vars.R
-#   (2) Adust vadd below to include new outcome name(s) 
+#   (2) Adust vnew below to include new outcome name(s) 
 #   (3) Run this chunk of code
 #   (4) This can also be used to *update* an outcome model
 
@@ -770,21 +754,32 @@ bartlist_nogait <- readRDS("DATA/outcome_models_bartlist_nogait.RDS")
 #   pull(value)
 
 # Add (top) automatically or (bottom) manually
-# vadd <- v[!(v %in% names(bartlist))]
-# vadd <- c("avgwb", "avgnwb", "meanswi_Foo_Ang_Trn")
+vnew <- NULL
+# vnew <- v[!(v %in% names(bartlist))]
+# vnew <- NULL
+# vnew <- c("minsta_Ank_Ang_Sag")
 
 # Fit and Save Models -----
-# if(length(vadd) > 0){
-#   temp <- vadd %>% map(\(v) build_pred_outcome_BART(dat, v), .progress = TRUE)
-#   names(temp) <- vadd
-#   bartlist <- c(bartlist, temp)
-#   saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
-# }
+if(length(vnew) > 0){
+  temp <- vnew %>% map(\(v) build_pred_outcome_BART(dat, v, usegait=TRUE), .progress = TRUE)
+  names(temp) <- vnew
+  bartlist <- c(bartlist, temp)
+  saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
+  
+  temp <- vnew %>% map(\(v) build_pred_outcome_BART(dat, v, usegait=FALSE), .progress = TRUE)
+  names(temp) <- vnew
+  bartlist_nogait <- c(bartlist_nogait, temp)
+  saveRDS(bartlist, "DATA/outcome_models_bartlist_nogait.RDS")
+}
 ```
 
 ```{r}
 #| label: predict-outcome-for-patient
 #| cache: false
+
+source("SCRIPTS/build_pred_outcome_BART.R")
+bartlist <- readRDS("DATA/outcome_models_bartlist.RDS")
+bartlist_nogait <- readRDS("DATA/outcome_models_bartlist_nogait.RDS")
 
 # Find variables needed for BART models, and add NA for missing variables -----
 # This is for kids without gait data
@@ -797,9 +792,9 @@ for (v in names(bartlist)) {
 
 usegait <- params$usegait
 if(usegait){
-  bartlist_pred <- readRDS("DATA/outcome_models_bartlist.RDS")
+  bartlist_pred <- bartlist
 } else {
-  bartlist_pred <- readRDS("DATA/outcome_models_bartlist_nogait.RDS")
+  bartlist_pred <- bartlist_nogait
 }
 
 # Predict outcomes all surgery x all variables -----
@@ -817,6 +812,26 @@ for (ss in surglist) {
 out_all <- temp %>% list_rbind()
 
 ```
+
+```{r}
+#| label: save-patient-data
+
+datsave <- 
+  list(
+    xpt = xpt,
+    propL = propL,
+    propR = propR,
+    proptbl = proptbl,
+    shap_all = shap_all,
+    shap_tables = shap_tables,
+    out_all = out_all
+  )
+
+# Save xpt, propL/R, etc... using params$MRN and params$Event_Date in name -----
+saveRDS(datsave, glue("EBData_{params$MRN}_{params$Event_Date}.RDS"))
+
+```
+
 
 ```{r}
 #| label: build-outcome-plots

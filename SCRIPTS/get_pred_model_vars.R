@@ -85,10 +85,15 @@ get_pred_model_vars <- function(v){
       c("HIP_ABD_0", 
         "ic_Hip_Ang_Cor", "maxsta_Hip_Ang_Cor", "minswi_Hip_Ang_Cor") 
   
+  if(v == "meansta_Hip_Ang_Cor") pred_vars <- 
+      c("HIP_ABD_0", 
+        "ic_Pel_Ang_Cor", "maxsta_Pel_Ang_Cor", "minswi_Pel_Ang_Cor",
+        "ic_Hip_Ang_Cor", "maxsta_Hip_Ang_Cor", "minswi_Hip_Ang_Cor", "meansta_Hip_Ang_Cor")  
+  
   if(v == "maxsta_Pel_Ang_Cor") pred_vars <- 
       c("HIP_ABD_0", 
         "ic_Pel_Ang_Cor", "maxsta_Pel_Ang_Cor", "minswi_Pel_Ang_Cor")
-  
+
   
   # Calf Muscle Contracture -----
   if(v == "ANK_DORS_0") pred_vars <- 
@@ -109,6 +114,11 @@ get_pred_model_vars <- function(v){
   if(v == "ic_Ank_Ang_Sag") pred_vars <- 
       c("ANK_DORS_0", "ANK_DORS_90",
         "ic_Ank_Ang_Sag", "midsta_Ank_Ang_Sag", "minswi_Ank_Ang_Sag",
+        "ic_Kne_Ang_Sag", "minsta_Kne_Ang_Sag")
+  
+  if(v == "minsta_Ank_Ang_Sag") pred_vars <- 
+      c("ANK_DORS_0", "ANK_DORS_90",
+        "ic_Ank_Ang_Sag", "midsta_Ank_Ang_Sag", "minswi_Ank_Ang_Sag", "minsta_Ank_Ang_Sag",
         "ic_Kne_Ang_Sag", "minsta_Kne_Ang_Sag")
   
   

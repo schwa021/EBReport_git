@@ -22,7 +22,6 @@ build_pred_outcome_BART <- function(dat, vv, usegait=TRUE){
   
   
   ################################################
-  # TEST CODE - remove gait variables      
   predvars_nogait <- 
     predvars %>% 
     str_subset(
