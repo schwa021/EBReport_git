@@ -1,24 +1,24 @@
 extract_data <- function(c, typestr){
   
-  # Initialize empty data
+  # Initialize empty data -----
   d <- tibble()
   
-  # Get point and analog data --------------------------------------------------
+  # Get point and analog data -----
   rate <- c$Header$Video_Sampling_Rate
   ptdat <- c$VideoData
   ptlabs <- names(ptdat)
   
-  # Identify all cycles bilaterally --------------------------------------------
+  # Identify all cycles bilaterally -----
   Lcyc <- find_all_strides(c)$Lcyc
   N_Lcyc <- nrow(Lcyc)
   Rcyc <- find_all_strides(c)$Rcyc
   N_Rcyc <- nrow(Rcyc)
   
-  # Test for "bad" c3d file ----------------------------------------------------
+  # Test for "bad" c3d file -----
   if(min(N_Lcyc, N_Rcyc) == 0 | is.null(N_Lcyc) | is.null(N_Rcyc)) return(d)   # test for no cycles
   if(nrow(c$VideoData) == 0) return(d)  # test for no 3d data
   
-  # Regular expressions to find typestr labels by model ------------------------
+  # Regular expressions to find typestr labels by model -----
   # Negative lookarounds are needed to filter out weirdsies
   neg <- case_when(
     typestr == "Trunk" ~ 
@@ -29,7 +29,7 @@ extract_data <- function(c, typestr){
       "(?!.*Rename)(?!.*Trunk)(?!.*Abs)(?!.*Virt)(?!.*Phys)(?!.*Gol)(?!.*2FP)(?!.*FF)(?!.*FootProgress)"
   )
   
-  # FPA stuff
+  # FPA stuff -----
   Lfpastr <- "(?!.*DJC|.*PAT)(^LFootProgress)"
   Rfpastr <- "(?!.*DJC|.*PAT)(^RFootProgress)"
   
@@ -49,6 +49,15 @@ extract_data <- function(c, typestr){
     RmatchCONV <- RmatchFMCPAT
   }
   
+  if(typestr == "Velocity"){
+    LmatchFMCPAT <- glue("{neg}(^L)\\w*(psoas_v|semimem_v|rect_fem_v|add_long_v|med_gas_v)")
+    RmatchFMCPAT <- glue("{neg}(^R)\\w*(psoas_v|semimem_v|rect_fem_v|add_long_v|med_gas_v)")
+    LmatchFMC <-  LmatchFMCPAT
+    RmatchFMC <-  RmatchFMCPAT
+    LmatchCONV <- LmatchFMCPAT
+    RmatchCONV <- RmatchFMCPAT
+  }
+  
   # Minimum number of labels that need to be present 
   minlab <- case_when(
     typestr == "Angle" ~ 8,
@@ -56,7 +65,8 @@ extract_data <- function(c, typestr){
     typestr == "Power" ~ 8,
     typestr == "Reaction" ~ 5,
     typestr == "Trunk" ~ 2,
-    typestr == "Length" ~ 3
+    typestr == "Length" ~ 3,
+    typestr == "Velocity" ~ 3
   )
   
   # Get labels for three models (FMCPAT, FMC, CONV). Strip side to compare
@@ -78,7 +88,7 @@ extract_data <- function(c, typestr){
   RCONV <- str_subset(RCONV, "DJC|PAT|Abs|Gol", negate = T)
   
   if(length(LCONV) == 0 | length(RCONV) == 0) return(d)
-    
+  
   
   # Fix Ankle and Pelvis Angle labels in FMC/ FMCPAT
   # If present, replace with CONV, if absent add CONV
@@ -108,7 +118,7 @@ extract_data <- function(c, typestr){
   
   
   # Pick Model and vnames ------------------------------------------------------
-    
+  
   v <- NULL
   modname <- NULL
   if(all(LFMCPAT %in% RFMCPAT) & all(RFMCPAT %in% LFMCPAT) & length(LFMCPAT) > minlab){
@@ -138,8 +148,10 @@ extract_data <- function(c, typestr){
   #Extract Data ----------------------------------------------------------------
   if(!is.null(v) & length(v) > minlab){
     d <-
-      map(.x = 1:min(N_Lcyc, N_Rcyc), 
-          ~ get_cycle_data(c, vnames = v, Lcyc, Rcyc, typestr, .x)) %>%
+      map(
+        .x = 1:min(N_Lcyc, N_Rcyc), 
+        ~ get_cycle_data(c, vnames = v, Lcyc, Rcyc, typestr, .x)
+      ) %>%
       list_rbind() %>%
       mutate(across(.cols = matches("^FootProg\\w*_X$"), ~ -(.x + 90)), model = modname)
   }

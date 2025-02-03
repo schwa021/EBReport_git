@@ -2,11 +2,24 @@
 
 # Function to build model and return model + stuff -----
 build_pred_outcome_BART <- function(dat, vv, usegait=TRUE){
-  # Function to split data -----
-  fsplit <- function(dat, ix, pred_vars, outvar){
+  # Function to split data by index -----
+  fsplit <- function(dat, ix, predvars, outvar){
     outvarPost <- glue("{outvar}Post")
     dout <- dat %>% filter(ix) %>% data.frame() %>% drop_na(all_of(c(outvar, outvarPost)))
-    xout <- dout %>% dplyr::select(all_of(pred_vars))
+    xout <- dout %>% dplyr::select(all_of(pred_ars))
+    yout <- dout %>% 
+      mutate(
+        del = .data[[outvarPost]] - .data[[outvar]]
+      ) %>% 
+      pull(del)
+    return(list("d" = dout, "x" = xout, "y" = yout))
+  }
+  
+  # Function to split data by Exam_ID list -----
+  fsplit_Exam <- function(dat, Exlist, predvars, outvar){
+    outvarPost <- glue("{outvar}Post")
+    dout <- dat %>% filter(Exam_ID %in% Exlist) %>% data.frame() %>% drop_na(all_of(c(outvar, outvarPost)))
+    xout <- dout %>% dplyr::select(all_of(predvars))
     yout <- dout %>% 
       mutate(
         del = .data[[outvarPost]] - .data[[outvar]]
@@ -34,6 +47,13 @@ build_pred_outcome_BART <- function(dat, vv, usegait=TRUE){
   }
   ################################################
   
+  # Split dat 80% - 20% based on Exam_ID -----
+  set.seed(42)
+  uid <- unique(dat$Exam_ID)
+  rnum <- runif(length(uid))
+  Exam_ID_train <- uid[between(rnum, 0, .8)]
+  Exam_ID_test <- uid[between(rnum, .8, 1)]
+  
   # Split into training and testing -----
   set.seed(42)
   rnum <- runif(nrow(dat))
@@ -41,13 +61,19 @@ build_pred_outcome_BART <- function(dat, vv, usegait=TRUE){
   itest <- between(rnum, .8, 1)
   
   # Make split -----
-  dtrain <- fsplit(dat, itrain, predvars, vv)$d
-  xtrain <- fsplit(dat, itrain, predvars, vv)$x
-  ytrain <- fsplit(dat, itrain, predvars, vv)$y
+  # dtrain <- fsplit(dat, itrain, predvars, vv)$d
+  # xtrain <- fsplit(dat, itrain, predvars, vv)$x
+  # ytrain <- fsplit(dat, itrain, predvars, vv)$y
+  dtrain <- fsplit_Exam(dat, Exam_ID_train, predvars, vv)$d
+  xtrain <- fsplit_Exam(dat, Exam_ID_train, predvars, vv)$x
+  ytrain <- fsplit_Exam(dat, Exam_ID_train, predvars, vv)$y
   
-  dtest <- fsplit(dat, itest, predvars, vv)$d
-  xtest <- fsplit(dat, itest, predvars, vv)$x
-  ytest <- fsplit(dat, itest, predvars, vv)$y
+  # dtest <- fsplit(dat, itest, predvars, vv)$d
+  # xtest <- fsplit(dat, itest, predvars, vv)$x
+  # ytest <- fsplit(dat, itest, predvars, vv)$y
+  dtest <- fsplit_Exam(dat, Exam_ID_test, predvars, vv)$d
+  xtest <- fsplit_Exam(dat, Exam_ID_test, predvars, vv)$x
+  ytest <- fsplit_Exam(dat, Exam_ID_test, predvars, vv)$y 
   
   # Build model -----
   mod <- bartMachine(xtrain, ytrain, use_missing_data = T, serialize = T, seed = 42)
@@ -58,7 +84,7 @@ build_pred_outcome_BART <- function(dat, vv, usegait=TRUE){
   testval <- rowMeans(temp$all_prediction_samples)
   
   # Get details
-  temp <- fsplit(dat, itest, c("Exam_ID", "SIDE"), vv)$x
+  temp <- dtest %>% select(Exam_ID, SIDE)
   
   testperf <- tibble(
     Exam_ID = temp$Exam_ID,

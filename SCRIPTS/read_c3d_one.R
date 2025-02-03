@@ -9,6 +9,8 @@ read_c3d_one <- function(mrn_in, tt){
   # Load functions -----
   # Main C3D Reader
   source("SCRIPTS/ReadC3D.R")
+  # Compute velocity -----
+  source("SCRIPTS/compute_vel.R")
   # Parameter Reader
   source("SCRIPTS/ReadC3DParameters.R")
   # Function to make 51 point spline
@@ -73,6 +75,7 @@ read_c3d_one <- function(mrn_in, tt){
   Trk <- vector(mode = "list", length = nrow(TrialInfo))
   Rxn <- vector(mode = "list", length = nrow(TrialInfo))
   Len <- vector(mode = "list", length = nrow(TrialInfo))
+  Vel <- vector(mode = "list", length = nrow(TrialInfo))
   ixupdate <- which(rep(TRUE, nrow(TrialInfo)))
   
   # Loop over  files in list -----
@@ -94,11 +97,16 @@ read_c3d_one <- function(mrn_in, tt){
       )
       if(is.null(c) | is.null(c$Header)) next
       
+      # Compute muscle velocities as first derivative of spline fit length -----
+      c <- compute_vel(c)
+      
       # Extract Angles (Ang), Trunk data (Trk), etc... -----
       Ang[[kk]] <- extract_data(c, typestr = "Angle")
       Trk[[kk]] <- extract_data(c, typestr = "Trunk")
       Len[[kk]] <- extract_data(c, typestr = "Length")
-      if(TrialInfo$Performed_Kinetics[kk] == 1){
+      Vel[[kk]] <- extract_data(c, typestr = "Velocity")
+      
+       if(TrialInfo$Performed_Kinetics[kk] == 1){
         Mom[[kk]] <- extract_data(c, typestr = "Moment")
         Pwr[[kk]] <- extract_data(c, typestr = "Power")
         Rxn[[kk]] <- extract_data(c, typestr = "Reaction")
@@ -113,6 +121,9 @@ read_c3d_one <- function(mrn_in, tt){
       
       if(nrow(Len[[kk]]) > 0) Len[[kk]] <- 
         make_long(Len[[kk]], kk, "Length", TrialInfo)
+      
+      if(nrow(Vel[[kk]]) > 0) Vel[[kk]] <- 
+        make_long(Vel[[kk]], kk, "Length", TrialInfo)
       
       if(TrialInfo$Performed_Kinetics[kk] == 1){
         Mom[[kk]] <- make_long(Mom[[kk]], kk, "Moment", TrialInfo)
@@ -129,6 +140,7 @@ read_c3d_one <- function(mrn_in, tt){
       Rxn[[kk]] <- g$rxn
       Trk[[kk]] <- tibble()
       Len[[kk]] <- tibble()
+      Vel[[kk]] <- tibble()
   }
     # Update time extracted -----
     TrialInfo$t_extracted[kk] <- now()
@@ -141,6 +153,7 @@ read_c3d_one <- function(mrn_in, tt){
   names(Rxn) <- glue("MRN.{mrn_in}.Exam_ID.{TrialInfo$Exam_ID}.Trial.{TrialInfo$Trial_Num}")
   names(Trk) <- glue("MRN.{mrn_in}.Exam_ID.{TrialInfo$Exam_ID}.Trial.{TrialInfo$Trial_Num}")
   names(Len) <- glue("MRN.{mrn_in}.Exam_ID.{TrialInfo$Exam_ID}.Trial.{TrialInfo$Trial_Num}")
+  names(Vel) <- glue("MRN.{mrn_in}.Exam_ID.{TrialInfo$Exam_ID}.Trial.{TrialInfo$Trial_Num}")
   
   # Compute Exam Averages -----  
   source("SCRIPTS/examavg.R")
@@ -151,6 +164,7 @@ read_c3d_one <- function(mrn_in, tt){
   Rxn_avg <- map(.x = exlist, ~ examavg(D = Rxn, TrialInfo, id = .x))
   Trk_avg <- map(.x = exlist, ~ examavg(D = Trk, TrialInfo, id = .x))
   Len_avg <- map(.x = exlist, ~ examavg(D = Len, TrialInfo, id = .x))
+  Vel_avg <- map(.x = exlist, ~ examavg(D = Vel, TrialInfo, id = .x))
   
   # Name the list elements by patientid, examid, and trial -----
   names(Ang_avg) <- glue("MRN.{mrn_in}.Exam_ID.{exlist}")
@@ -159,6 +173,7 @@ read_c3d_one <- function(mrn_in, tt){
   names(Rxn_avg) <- glue("MRN.{mrn_in}.Exam_ID.{exlist}")
   names(Trk_avg) <- glue("MRN.{mrn_in}.Exam_ID.{exlist}")
   names(Len_avg) <- glue("MRN.{mrn_in}.Exam_ID.{exlist}")
+  names(Vel_avg) <- glue("MRN.{mrn_in}.Exam_ID.{exlist}")
   
   # Compute statistics -----
   # Stretchwrap every new Exam_ID -----
@@ -170,9 +185,9 @@ read_c3d_one <- function(mrn_in, tt){
   pwrdat <- map(.x = samp, ~ stretchwrap(Pwr_avg[[.x]], d = 0)) %>% list_cbind()
   rxndat <- map(.x = samp, ~ stretchwrap(Rxn_avg[[.x]], d = 0)) %>% list_cbind()
   lendat <- map(.x = samp, ~ stretchwrap(Len_avg[[.x]], d = 0)) %>% list_cbind()
+  veldat <- map(.x = samp, ~ stretchwrap(Vel_avg[[.x]], d = 0)) %>% list_cbind()
   trkdat <- map(.x = samp, ~ stretchwrap(Trk_avg[[.x]], d = 0)) %>% list_cbind()
-  # Get lengthening rate (so-called "velocity") Note d = 1 takes analytic spline derivative -----
-  veldat <- map(.x = samp, ~ stretchwrap(Len_avg[[.x]], d = 1)) %>% list_cbind()
+
 
   # Compute statistics -----
   Ang_stats <- allstats(angdat)
@@ -183,26 +198,6 @@ read_c3d_one <- function(mrn_in, tt){
   Len_stats <- allstats(lendat)
   Vel_stats <- allstats(veldat)
 
-  # Lengthening rate ("vel") stats need to be scaled by steplength/speed -----
-  if(!is.null(Len_stats)){
-  scaledat <-
-    Len_avg %>%
-    list_rbind() %>%
-    select(side, Exam_ID, speed, steplen) %>%
-    distinct() %>%
-    mutate(vscale = steplen / speed,
-           Exam_ID = as.character(Exam_ID)) %>%
-    select(-c(speed, steplen))
-
-  Vel_stats <-
-    Vel_stats %>%
-    left_join(scaledat) %>%
-    mutate(value = value * vscale) %>%
-    select(-vscale)
-  } else {
-    Vel_stats <- NULL
-  }
-  
   # Function to automatically name list elements -----
   listN <- function(...){
     anonList <- list(...)

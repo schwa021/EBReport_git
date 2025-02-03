@@ -8,11 +8,15 @@ REPORTS/
 VIDEO/
 FIGURES/
 ARCHIVE/
+WIP/
+OUTPUT/
 
 Temp.qmd
 junk*
 *.mp4
 EB*.RDS
+
+*.RDATA
 
 EB*.html
 *.png

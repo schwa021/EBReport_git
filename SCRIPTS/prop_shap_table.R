@@ -12,10 +12,18 @@ prop_shap_table <- function(df, sname, mod, x, varlabs){
       data.frame() %>% 
       mutate(
         across(
-          where(is.numeric),
+          where(is.numeric) & contains(c("len", "vel")),
+          ~ signif(., 3)
+        ),
+        across(
+          where(is.numeric) & !contains(c("len", "vel")),
           ~ signif(., 2)
+        ),
+        across(
+          where(is.numeric) & !contains(c("len", "vel")) & matches("^ic|^fo|^ofo|^ofc|^mean|^min|^max|^t_|^mids|^rom"),
+          ~ round(.)
         )
-      ) 
+      )
   }  
   xL <- getx(x, "L")
   xR <- getx(x, "R")
@@ -33,8 +41,19 @@ prop_shap_table <- function(df, sname, mod, x, varlabs){
   makelab <- function(shapres, xside){
     for (f in shapres$results$feature) {
       val <- xside[[f]]
-      gaitvbl <- str_detect(f, "^ic|^fo|^ofo|^ofc|^mean|^min|^max|^t_|^mids")
-      val <- ifelse(gaitvbl, round(val), as.character(val))
+      gaitvbl <- str_detect(f, "^ic|^fo|^ofo|^ofc|^mean|^min|^max|^t_|^mids|^rom")
+      lenvbl <- str_detect(f, "len$")
+      velvbl <- str_detect(f, "vel$")
+      if(is.character(val)) {
+        val <- val
+      } else {
+        val <- case_when(
+          gaitvbl & !(lenvbl | velvbl) ~ as.character(val),
+          lenvbl ~ as.character(val),
+          velvbl ~ sprintf("%.1e", val),
+          TRUE ~ as.character(val)
+        )
+      }
       
       # Add label - first check for emoji version, then plain text, then blank
       lab <- varlabs$Labelx[varlabs$Variable == f]
@@ -49,7 +68,8 @@ prop_shap_table <- function(df, sname, mod, x, varlabs){
     }   
     return(shapres)
   }
-  shapL <- makelab(shapL, xL)
+  
+  shapL <- makelab(shapres=shapL, xside=xL)
   shapR <- makelab(shapR, xR)
   
   # Arrange data and scale phi based on threshold -----

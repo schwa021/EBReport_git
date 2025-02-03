@@ -43,7 +43,7 @@
     },
     "Hmisc": {
       "Package": "Hmisc",
-      "Version": "5.2-0",
+      "Version": "5.2-2",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -67,7 +67,7 @@
         "rpart",
         "viridis"
       ],
-      "Hash": "d638b141693a9c73f653787ea29db79f"
+      "Hash": "ce88f29ff07b63c77f9b7ac747b9321b"
     },
     "MASS": {
       "Package": "MASS",
@@ -159,6 +159,18 @@
         "R"
       ],
       "Hash": "45f0398006e83a5b10b72a90663d8d8c"
+    },
+    "RCurl": {
+      "Package": "RCurl",
+      "Version": "1.98-1.16",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "bitops",
+        "methods"
+      ],
+      "Hash": "ddbdf53d15b47be4407ede6914f56fbb"
     },
     "RODBC": {
       "Package": "RODBC",
@@ -621,7 +633,7 @@
     },
     "cluster": {
       "Package": "cluster",
-      "Version": "2.1.6",
+      "Version": "2.1.8",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -631,7 +643,7 @@
         "stats",
         "utils"
       ],
-      "Hash": "0aaa05204035dc43ea0004b9c76611dd"
+      "Hash": "b361779da7f8b129a1859b6cf243ba58"
     },
     "codetools": {
       "Package": "codetools",
@@ -1570,6 +1582,23 @@
       ],
       "Hash": "cd4d593e8ce0ad4e5c2c0acc50ce7330"
     },
+    "h2o": {
+      "Package": "h2o",
+      "Version": "3.44.0.3",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "RCurl",
+        "graphics",
+        "jsonlite",
+        "methods",
+        "stats",
+        "tools",
+        "utils"
+      ],
+      "Hash": "abc5f6816dcdbe20daf85199eec2189c"
+    },
     "haven": {
       "Package": "haven",
       "Version": "2.5.4",
@@ -1964,6 +1993,16 @@
         "xfun"
       ],
       "Hash": "074efab766a9d6360865ad39512f2a7e"
+    },
+    "matrixStats": {
+      "Package": "matrixStats",
+      "Version": "1.5.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "9fd316b52ac8c24fef4c67fdd646e965"
     },
     "memoise": {
       "Package": "memoise",

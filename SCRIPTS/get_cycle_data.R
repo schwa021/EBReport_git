@@ -26,13 +26,14 @@ get_cycle_data <- function(c, vnames, Lcyc, Rcyc, typestr, cycle){
       return(x)
     }
   }
-  
+ 
   # Function to get data -------------------------------------------------------
   get_d <- function(dat, side, Scyc, Sk, cycle, value_scale){
     
     oppside <- ifelse(side == "L", "R", "L")
     
-    d <- dat %>% 
+    d <- 
+      dat %>% 
       filter(between(Frame, Scyc$FC1[cycle], Scyc$FC2[cycle])) %>% 
       select(-Frame) %>% 
       select(-starts_with(oppside)) %>% 
@@ -45,7 +46,7 @@ get_cycle_data <- function(c, vnames, Lcyc, Rcyc, typestr, cycle){
         OFC = Sk$OFC[cycle],
         FO = Sk$FO[cycle],
         speed = mean(speed),
-        steplen = abs(disp[51] - disp[Sk$OFC[cycle]]),
+        steplen = abs(disp[51] - disp[Sk$OFC[cycle]/2]),
         stridelen = abs(disp[51] - disp[1]),
         oppsteplen = stridelen - steplen
       ) %>% 
@@ -114,7 +115,7 @@ get_cycle_data <- function(c, vnames, Lcyc, Rcyc, typestr, cycle){
     TRUE ~ 1
   )
   
-  if(typestr %in% c("Angle", "Trunk", "Length")) value_scale = 1
+  if(typestr %in% c("Angle", "Trunk", "Length", "Velocity")) value_scale = 1
   
   
   # get speed and steplength ---------------------------------------------------

@@ -31,7 +31,7 @@ get_varlabs <- function(){
     str_replace("Mom", "Moment") %>% 
     str_replace("Pwr", "Power") %>% 
     str_replace("len", "Length") %>% 
-    str_replace("vel", "Strain Rate") %>% 
+    str_replace("vel", "Velocity") %>% 
     str_replace_all("_", " ") %>% 
     str_replace_all("  ", " ") %>% 
     str_replace("Add Long", "Adductor Longus") %>% 

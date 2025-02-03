@@ -39,9 +39,9 @@ execute:
     
 params:
   # MRN: 606085
-  MRN: 485602
+  MRN: 629832
   # Event_Date: "2018-06-21"
-  Event_Date: "2024-12-18"
+  Event_Date: "2025-01-14"
   deid: FALSE
   usevideo: TRUE
   usegait: TRUE
@@ -219,9 +219,9 @@ for (s in surglist) {
     assign(glue("opt_{s}_nogait"), slist[[2]])
   } else {
     # Set usegait to build with (TRUE) or without (FALSE) gait data -----
-    usegait = FALSE
+    usegait = TRUE
     surg <- glue("interval_{s}")
-    res <- build_propensity_mod(s, dat, fp2fn=1, usegait)
+    res <- build_propensity_mod(s, df=dat, fp2fn=1, usegait)
     assign(glue("res_{s}"), res)
     mod <- res$mod
     opt <- res$opt
@@ -323,6 +323,14 @@ xpt <-
 
 # Add average spa, sel, str, wb, nwb -----
 xpt <- get_meanscores(xpt, "Pre")
+
+# Get oxygen net pct and z scores -----
+xpt <- get_O2_Z(xpt)
+
+# If diagnosis is Myelo - make affected side Bilateral -----
+if(xpt$dx[1] %in% c("Myelomeningocele")){
+  xpt$affected <- factor(TRUE, levels = c("FALSE", "TRUE"))
+}
 
 # Format name and date -----
 if(!params$deid){
@@ -550,7 +558,7 @@ if(!params$deid & !(all(vidlist %in% temp))){
 #| panel: tabset
 #| eval: false
 
-# This is the old video tabs code. Leaving it here for now (26AUG2024)
+# This is the OLD video tabs code. Leaving it here for now (26AUG2024)
 # for (kk in 1:length(vidlist)) {
 #   cat("\n\n###", str_replace(vidlabs[kk], "_", " + "), "  \n\n")
 #   cat("\n\n <video width=800 controls>
@@ -590,6 +598,31 @@ cat(paste0("```{=html}\n", code, "\n```"))
 ## Treatment Assignment
 
 ::: {#treatment-assignment .panel-tabset}
+<!-- ### Model Applicability  -->
+
+<!-- The similarity of the patient to the historical data used to fit the propensity and outcome models.  -->
+
+<!-- > <center>![](DATA/caution.jpeg){width="2in"}\ -->
+<!-- > Models with **poor applicability** should be interpreted with extra caution.</center> -->
+
+```{r}
+#| label: compute-model-applicability
+#| cache: false
+#| include: false
+
+source("SCRIPTS/outlier_isoforest.R")
+source("SCRIPTS/format_applicability.R")
+
+# Compute anomaly score using isolation forest for dx and all surgeries -----
+modlist <-  c("dx", surglist)
+res <- modlist %>% map(\(x) outlier_isoforest(xpt, dat, x), .progress = TRUE)
+
+applicability <- format_applicability(res, surglist, xpt)
+
+applicability
+
+```
+
 ### Propensity Profile
 
 The likelihood that the limb would have undergone the indicated surgery based on historical practice standards.
@@ -771,6 +804,7 @@ if(length(vnew) > 0){
   bartlist_nogait <- c(bartlist_nogait, temp)
   saveRDS(bartlist, "DATA/outcome_models_bartlist_nogait.RDS")
 }
+
 ```
 
 ```{r}
