@@ -609,18 +609,13 @@ cat(paste0("```{=html}\n", code, "\n```"))
 #| label: compute-model-applicability
 #| cache: false
 #| include: false
-
 source("SCRIPTS/outlier_isoforest.R")
 source("SCRIPTS/format_applicability.R")
-
 # Compute anomaly score using isolation forest for dx and all surgeries -----
 modlist <-  c("dx", surglist)
 res <- modlist %>% map(\(x) outlier_isoforest(xpt, dat, x), .progress = TRUE)
-
 applicability <- format_applicability(res, surglist, xpt)
-
 applicability
-
 ```
 
 ### Propensity Profile

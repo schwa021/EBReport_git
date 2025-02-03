@@ -9,16 +9,16 @@ VIDEO/
 FIGURES/
 ARCHIVE/
 WIP/
-OUTPUT/
+OUTPUT/appdata*
+
+*.RDS
+EB*.RDS
+EB*.html
 
 Temp.qmd
 junk*
 *.mp4
-EB*.RDS
-
 *.RDATA
-
-EB*.html
 *.png
 FAQT*
 test*
