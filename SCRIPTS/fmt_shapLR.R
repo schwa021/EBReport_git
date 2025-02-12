@@ -1,12 +1,12 @@
 fmt_shapLR <- function(tall, ptprops, s){
 
-  tit <- str_replace_all(s, "_", " ")
+  tit <- str_replace_all(vlabs[s], "_", " ")
   
   t <- tall[[s]]
   
   p <- ptprops |> 
     filter(
-      Surgery == str_replace_all(s, "_", " ")
+      Surgery == str_replace_all(vlabs[s], "_", " ")
     )
   
   # Get fill color for propensity value/range row -----

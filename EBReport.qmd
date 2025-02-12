@@ -38,10 +38,10 @@ execute:
   error: false
     
 params:
-  # MRN: 606085
-  MRN: 629832
-  # Event_Date: "2018-06-21"
-  Event_Date: "2025-01-14"
+  MRN: 606085
+  # MRN: 629832
+  Event_Date: "2018-06-21"
+  # Event_Date: "2025-01-14"
   deid: FALSE
   usevideo: TRUE
   usegait: TRUE
@@ -598,25 +598,6 @@ cat(paste0("```{=html}\n", code, "\n```"))
 ## Treatment Assignment
 
 ::: {#treatment-assignment .panel-tabset}
-<!-- ### Model Applicability  -->
-
-<!-- The similarity of the patient to the historical data used to fit the propensity and outcome models.  -->
-
-<!-- > <center>![](DATA/caution.jpeg){width="2in"}\ -->
-<!-- > Models with **poor applicability** should be interpreted with extra caution.</center> -->
-
-```{r}
-#| label: compute-model-applicability
-#| cache: false
-#| include: false
-source("SCRIPTS/outlier_isoforest.R")
-source("SCRIPTS/format_applicability.R")
-# Compute anomaly score using isolation forest for dx and all surgeries -----
-modlist <-  c("dx", surglist)
-res <- modlist %>% map(\(x) outlier_isoforest(xpt, dat, x), .progress = TRUE)
-applicability <- format_applicability(res, surglist, xpt)
-applicability
-```
 
 ### Propensity Profile
 
@@ -666,6 +647,11 @@ source("SCRIPTS/get_prop.R")
 # Get left and right propensity and format into L/R propensity table -----
 propL <- get_prop(propLmean, post, surglist, "L")
 propR <- get_prop(propRmean, post, surglist, "R")
+
+# Look up surgery name labels -----
+propL$Surgery <- ifelse(is.na(vlabs[propL$Surgery]), propL$Surgery, vlabs[propL$Surgery])
+propR$Surgery <- ifelse(is.na(vlabs[propR$Surgery]), propL$Surgery, vlabs[propR$Surgery])
+
 proptbl <- ptableLR(propL, propR)
 proptbl
 
@@ -719,8 +705,12 @@ Clinical factors underlying the historical practice standard, arranged from larg
 #| label: display-propensity-details
 #| results: asis
 
+# Get tab names -----
+tabnames <- vlabs[surglist]
+
 for (kk in 1:length(shap_tables)) {
-  cat("####", str_replace_all(surglist[kk], "_", " "), "\n\n")
+  # cat("####", str_replace_all(surglist[kk], "_", " "), "\n\n")
+  cat("####", tabnames[[kk]], "\n\n")
   print(shap_tables[[kk]])
   cat("\n\n")
   
@@ -945,8 +935,12 @@ Plots show [*Change Scores*]{.underline}. [**Treated**]{style="color: #005600"} 
 #| results: asis
 #| fig-height: 6.5
 
+# Get tab names -----
+tabnames <- vlabs[names(p_s)]
+
 for (kk in 1:length(p_s)) {
-  cat("####", str_replace_all(names(p_s)[[kk]], "_", " "), "\n\n")
+  # cat("####", str_replace_all(names(p_s)[[kk]], "_", " "), "\n\n")
+  cat("####", tabnames[[kk]], "\n\n")
   print(p_s[[kk]])
   cat("\n\n")
 }

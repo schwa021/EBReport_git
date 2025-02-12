@@ -22,6 +22,7 @@ gettables <- function() {
   Surgical.tbl <- sqlFetch(con, "Surgical")
   SurgDetails.tbl <- sqlFetch(con, "Surgical_Details")
   SurgDetails_lookup.tbl <- sqlFetch(con, "_Detail")
+  SurgProcType_lookup.tbl <- sqlFetch(con, "_ProcType")
   Treatment.tbl <- sqlFetch(con, "Treatment")
   Historical.tbl <- sqlFetch(con, "Historical")
   Referral.tbl <- sqlFetch(con, "Referral")
@@ -82,7 +83,7 @@ gettables <- function() {
       items_lookup.tbl, FuncRatePar_lookup, FunctionalFU_Activities_lookup,
       Effect_lookup, Outcome_lookup, GMFCS_lookup, PtFreq_lookup, PtProg_lookup,
       Lim_Fac_lookup, LimFactor_lookup, Delivery_lookup, Orthotic_lookup, DevType_lookup,
-      Physician_lookup, rating_lookup.tbl
+      Physician_lookup, rating_lookup.tbl, SurgProcType_lookup.tbl
     )
   )
 }

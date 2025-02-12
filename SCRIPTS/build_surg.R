@@ -7,6 +7,7 @@ build_surg <- function(tbls){
   surg <- left_join(tbls$Patient_Events.tbl, surg)
   surg <- left_join(tbls$Patient.tbl, surg)
   
+
   # Define Neurolytic Injection meta
   botox <- surg$SurgCode == "Neural BOTOX"
   injection <-

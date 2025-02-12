@@ -223,6 +223,10 @@ get_patient_info <- function(xpt, deid) {
     )|> 
     select(-c(Birth_Date, Age, Ageyr, Agemo, Agestr, Proc_Desc, matches("Desc1|Desc2|Loc1|Loc2"))) |> 
     arrange(Event_Date)
+  
+  # Lookup surgery names
+  temp <- vlabs[surgdat$SurgCode]
+  surgdat$SurgCode <- ifelse(is.na(temp), surgdat$SurgCode, temp)
 
   
   tsurg <- NULL
