@@ -197,7 +197,7 @@ get_pred_model_vars <- function(v){
   
   if(v == "FAQT") pred_vars <- 
       c("FAQT",
-        "avgspa", "avgwb", "avgnwb"
+        "avgspa"
       )  
   
   # Anteversion and Related Measures -----

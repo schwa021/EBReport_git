@@ -4,6 +4,29 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
   # Get name levels -----
   namelevs <- fct_inorder(vlabs[vv])
   
+  # If propensity scores - compute -----
+  if(all(str_detect(v, "p_"))){
+    temp <- fd$FD %>% read_and_organize()
+    
+    vall <- names(datpre)
+    vx <- names(temp)
+    vadd <- vall[!(vall %in% vx)]
+    temp[vadd] <- NA
+    
+    usegait <- params$usegait
+    for (s in surglist) {
+      set.seed(42)
+      if(usegait){
+        mod <- get(glue("mod_{s}"))
+        temp[glue("p_{s}")] <- predict(mod, temp[names(mod$X)])
+      } else {
+        mod <- get(glue("mod_{s}_nogait"))
+        temp[glue("p_{s}")] <- predict(mod, temp[names(mod$X)])
+      }
+    }
+    fd$FD <- temp
+  }
+  
   # Build plot data -----
   pdat <-
     fd$FD |>
@@ -93,6 +116,12 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
     lims[2,] <- 100
   }
   
+  # If propensity data set lims (0, 1) ------
+  if(str_detect(vv[1], "^p_")){
+    lims[1,] <- 0
+    lims[2,] <- 1
+  }
+  
   
   # Generate plot limits -----
   # Note that, in general vv = v, exception for GDI d/t (Left)/(Right)...
@@ -108,6 +137,13 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
   # Set conditional age limits for plotting (25 or pt age) -----
   xmax <- ifelse(max(pdat$age) > 25, ceil(max(pdat$age)), 25)
   
+  # set number of columns for facets -----
+  nvar <- length(unique(pdat$name))
+  ncolfacet <- case_when(
+    nvar < 5 ~ 2,
+    TRUE ~ 3
+  )
+  
   # Make Plot -----
   p <-
     ggplot(pdat, aes(x = age, y = as.numeric(value), color = SIDE)) +
@@ -121,7 +157,7 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
       color = NA,
       alpha = .2
     ) +
-    facet_wrap(~ name, scales = "free_y") +
+    facet_wrap(~ name, scales = "free_y", ncol = ncolfacet) +
     geom_line(
       data = dd,
       aes(y=pct50),
@@ -134,7 +170,7 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
     geom_point(size = 1.45) +
     geom_point(data = dlims) +
     
-    coord_cartesian(xlim = c(2, xmax), clip = "off") +
+    coord_cartesian(xlim = c(2, xmax)) +
     scale_color_discrete_qualitative(
       palette = "Dark 3",
       c1 = 80,

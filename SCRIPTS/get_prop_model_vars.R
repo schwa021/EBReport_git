@@ -26,8 +26,8 @@ get_prop_model_vars <- function(s){
   if(s == "Psoas_Release") prop_vars <- 
       c("HIP_EXT", "POP_ANG_UNI", 
         # "HIP_FLEX_STR", 
-        "meansta_Pel_Ang_Sag", "maxsta_Pel_Ang_Sag", "minsta_Pel_Ang_Sag", "minsta_Hip_Ang_Sag"
-        # "prior_Hams_Lengthening"
+        "meansta_Pel_Ang_Sag", "maxsta_Pel_Ang_Sag", "minsta_Pel_Ang_Sag", "minsta_Hip_Ang_Sag",
+        "prior_Psoas_Release"
         )
   
   if(s == "Hams_Lengthening") prop_vars <- 

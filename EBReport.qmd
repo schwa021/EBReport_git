@@ -38,12 +38,12 @@ execute:
   error: false
     
 params:
-  MRN: 606085
-  # MRN: 629832
-  Event_Date: "2018-06-21"
-  # Event_Date: "2025-01-14"
+  # MRN: 606085
+  MRN: 683553
+  # Event_Date: "2018-06-21"
+  Event_Date: "2025-02-12"
   deid: FALSE
-  usevideo: TRUE
+  usevideo: FALSE
   usegait: TRUE
   figsave: FALSE
   custom_outcome: FALSE
@@ -130,6 +130,9 @@ surglist <- c("Femoral_Derotation_Osteotomy", "Tibial_Derotation_Osteotomy", "Ps
 
 # For trimming white space around figures -----
 knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
+
+# For controlling evaluation -----
+usevideo <- params$usevideo
 
 ```
 
@@ -246,13 +249,19 @@ for (s in surglist) {
 # Compute propensities -----
 if(is.null(dat$p_Femoral_Derotation_Osteotomy)){
   for (s in surglist) {
+    # Load models -----
+    load(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))
+    mod <- slist[[1]]
+    load(glue("OUTPUT/Propensity_Models/prop_{s}_nogait.RDATA"))
+    mod_nogait <- slist[[1]]
+    
     cat("Computing Propensity for Surgery ", s, "\n")
-    mod <- get(glue("mod_{s}"))
+    # mod <- get(glue("mod_{s}"))
     set.seed(42)
     dat[[glue("p_{s}")]] <- predict(mod, dat[names(mod$X)])
-    mod <- get(glue("mod_{s}_nogait"))
+    # mod <- get(glue("mod_{s}_nogait"))
     set.seed(42)
-    dat[[glue("p_{s}_nogait")]] <- predict(mod, dat[names(mod$X)])
+    dat[[glue("p_{s}_nogait")]] <- predict(mod_nogait, dat[names(mod_nogait$X)])
   }
   saveRDS(dat, glue("DATA/preprocessed_data_{as.Date(now())}.RDS"))
   saveRDS(dat, glue("DATA/preprocessed_data_current.RDS"))
@@ -517,7 +526,7 @@ p
 
 ```{r}
 #| label: get-video
-#| eval: params$usevideo
+#| eval: !expr usevideo
 #| include: false
 #| cache: false
 
@@ -571,6 +580,8 @@ if(!params$deid & !(all(vidlist %in% temp))){
 ```{r}
 #| label: generate-html-video-code
 #| cache: false
+#| eval: !expr usevideo
+
 
 # If deidentified, fix mkr file name -----
 # TODO
@@ -583,7 +594,7 @@ build_video_tabs(vidlist, vidfile)
 
 ```{r}
 #| label: display-html-video-code
-#| eval: params$usevideo
+#| eval: !expr usevideo
 #| results: "asis" 
 #| echo: false
 
@@ -596,16 +607,6 @@ cat(paste0("```{=html}\n", code, "\n```"))
 ```
 
 ## Treatment Assignment
-
-::: {#treatment-assignment .panel-tabset}
-
-### Propensity Profile
-
-The likelihood that the limb would have undergone the indicated surgery based on historical practice standards.
-
-> <center>![](DATA/caution.jpeg){width="2in"}\
-> *Meeting historical standards **does not** ensure a good outcome.\
-> Check **Outcome Predictions** tab for additional information.*</center>
 
 ```{r}
 #| label: compute-propensity-posteriors
@@ -641,12 +642,13 @@ xR <- xpt |> filter(SIDE == "R")
 ```{r}
 #| label: display-propensity-profile
 #| cache: false
+#| include: false
 
 source("SCRIPTS/get_prop.R")
 
 # Get left and right propensity and format into L/R propensity table -----
-propL <- get_prop(propLmean, post, surglist, "L")
-propR <- get_prop(propRmean, post, surglist, "R")
+propL <- get_prop(post, surglist, "L")
+propR <- get_prop(post, surglist, "R")
 
 # Look up surgery name labels -----
 propL$Surgery <- ifelse(is.na(vlabs[propL$Surgery]), propL$Surgery, vlabs[propL$Surgery])
@@ -696,59 +698,6 @@ for (s in surglist) {
 
 ```
 
-### Clinical Reasoning
-
-Clinical factors underlying the historical practice standard, arranged from largest positive contributor ([**indications**]{style="color: #005600"}) to largest negative contributor ([**counter-indications**]{style="color: #841859"}). The top row shows the median (5%, 95%) surgery likelihood, color coded from [**high likelihood**]{style="color: #005600"} to [**low likelihood**]{style="color: #841859"}. The range in propensities accounts for measurement error variability in practice.  The &#x1F6B6;&#x1F3FD;&#x200D;&#x2642;&#xFE0F;️ symbol indicates a kinematic variable<br> <br>
-
-::: {.panel-tabset .nav-pills group="treatment"}
-```{r}
-#| label: display-propensity-details
-#| results: asis
-
-# Get tab names -----
-tabnames <- vlabs[surglist]
-
-for (kk in 1:length(shap_tables)) {
-  # cat("####", str_replace_all(surglist[kk], "_", " "), "\n\n")
-  cat("####", tabnames[[kk]], "\n\n")
-  print(shap_tables[[kk]])
-  cat("\n\n")
-  
-  # Save for external use -----
-  if(params$figsave){
-    gtsave(shap_tables[[kk]], glue("FIGURES/Clin_Reasoning_{surglist[kk]}.png"), expand = c(10, 40, 10, 00))
-  }
-}
-
-```
-:::
-
-```{r}
-#| label: build-all-outcome-models
-#| eval: false
-
-# This is the code to build the outcome prediction models -----
-# Builds models for all default outcomes - Need to update with a  "master list"
-# Should run this if models or test data change. Default is eval: FALSE
-
-# source("SCRIPTS/build_pred_outcome_BART.R")
-# 
-# # Get all outcome variables -----
-# v <- vector()
-# for (ss in surglist) {
-#   v <- c(v, get_outcome_vars(ss))
-# }
-# v <- unique(v)
-# 
-# # Compute Models -----
-# usegait = TRUE
-# bartlist <- v %>% map(\(v) build_pred_outcome_BART(dat, v, usegait), .progress = TRUE)
-# names(bartlist) <- v
-
-# Save bartlist into data
-# saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
-```
-
 ```{r}
 #| label: add-outcome-models-if-needed
 #| eval: false
@@ -771,11 +720,14 @@ bartlist_nogait <- readRDS("DATA/outcome_models_bartlist_nogait.RDS")
 #   arrange(name) %>%
 #   pull(value)
 
-# Add (top) automatically or (bottom) manually
+# Add (top) automatically or (bottom) manually -----
 vnew <- NULL
 # vnew <- v[!(v %in% names(bartlist))]
 # vnew <- NULL
 # vnew <- c("minsta_Ank_Ang_Sag")
+
+# Re-calculate existing -----
+# vnew <- names(bartlist)
 
 # Fit and Save Models -----
 if(length(vnew) > 0){
@@ -796,7 +748,7 @@ if(length(vnew) > 0){
 #| label: predict-outcome-for-patient
 #| cache: false
 
-source("SCRIPTS/build_pred_outcome_BART.R")
+# source("SCRIPTS/build_pred_outcome_BART.R")
 bartlist <- readRDS("DATA/outcome_models_bartlist.RDS")
 bartlist_nogait <- readRDS("DATA/outcome_models_bartlist_nogait.RDS")
 
@@ -850,7 +802,6 @@ datsave <-
 saveRDS(datsave, glue("EBData_{params$MRN}_{params$Event_Date}.RDS"))
 
 ```
-
 
 ```{r}
 #| label: build-outcome-plots
@@ -925,7 +876,75 @@ for (s in surglist) {
 } 
 ```
 
-### Outcome Details
+::: {#treatment-assignment .panel-tabset}
+
+### Summary Checklist 
+
+For each side we report whether (1) surgery meets the historical standard of practice, and (2) surgery is likely to have a clinically relevant effect at the levels of body structure, focal kinematics, overall kinematics, and mobility.
+
+> <center>![](DATA/caution.jpeg){width="2in"}\
+> Check **Clinical Reasoning** and **Outcome Predictions** for details</center>
+
+```{r}
+#| cache: false
+#| include: true
+
+source("SCRIPTS/build_checklist.R")
+checklist <- build_checklist(surglist, out_all)
+checklist
+
+```
+
+### Propensity Profile
+
+The likelihood that the limb would have undergone the indicated surgery based on historical practice standards.
+
+> <center>![](DATA/caution.jpeg){width="2in"}\
+> *Meeting historical standards **does not** ensure a good outcome.\
+> Check **Outcome Predictions** tab for additional information.*</center>
+
+
+```{r}
+#| label: display-propensity-profile-plot
+#| cache: false
+
+source("SCRIPTS/propgraph.R")
+p <- propgraph(propL, propR)
+p
+
+```
+
+### Clinical Reasoning
+
+Clinical factors underlying the historical practice standard, arranged from largest positive contributor ([**indications**]{style="color: #005600"}) to largest negative contributor ([**counter-indications**]{style="color: #841859"}). The top row shows the median (5%, 95%) surgery likelihood, color coded from [**high likelihood**]{style="color: #005600"} to [**low likelihood**]{style="color: #841859"}. The range in propensities accounts for measurement error variability in practice.  The &#x1F6B6;&#x1F3FD;&#x200D;&#x2642;&#xFE0F;️ symbol indicates a kinematic variable<br> <br>
+
+::: {.panel-tabset .nav-pills group="treatment"} 
+
+```{r}
+#| label: display-propensity-details
+#| results: asis
+
+# Get tab names -----
+tabnames <- vlabs[surglist]
+
+for (kk in 1:length(shap_tables)) {
+  # cat("####", str_replace_all(surglist[kk], "_", " "), "\n\n")
+  cat("####", tabnames[[kk]], "\n\n")
+  print(shap_tables[[kk]])
+  cat("\n\n")
+  
+  # Save for external use -----
+  if(params$figsave){
+    gtsave(shap_tables[[kk]], 
+           glue("FIGURES/Clin_Reasoning_{surglist[kk]}.png"), 
+           expand = c(10, 40, 10, 00))
+  }
+}
+
+```
+:::
+
+### Outcome Predictions
 
 Plots show [*Change Scores*]{.underline}. [**Treated**]{style="color: #005600"} limbs underwent the surgery while [**Control**]{style="color: #841859"} limbs did not. The mean (point), 50% prediction interval (thick line), and 90% prediction interval (thin line) are shown.<br>
 
@@ -1067,7 +1086,7 @@ The plots show the development of various measurements with age. Measurement unc
 
 ```{r}
 #| label: display-ht-wt
-#| fig-height: 3.5
+#| fig-height: 4.5
 
 # Compute leg length diff
 source("SCRIPTS/get_LLD.R")
@@ -1086,7 +1105,7 @@ p
 
 ```{r}
 #| label: display-av-tt
-#| fig-height: 3.5
+#| fig-height: 4.5
 
 v <- c("ANTEVERSION", "EOS_FemTor", "BIMAL", "EOS_Bimal")
 cap = "All angles in degrees"
@@ -1098,7 +1117,7 @@ p
 
 ```{r}
 #| label: display-contr-tt
-#| fig-height: 3.5
+#| fig-height: 4.5
 
 v <- c("HIP_EXT", "POP_ANG_UNI", "HIP_ABD_0", "KNEE_EXT", "ANK_DORS_0", "ANK_DORS_90")
 cap = "All angles in degrees"
@@ -1110,7 +1129,7 @@ p
 
 ```{r}
 #| label: display-gdi-dmc-faqt
-#| fig-height: 3.5
+#| fig-height: 4.5
 
 v <- c("DMC_L", "DMC_R", "FAQT", "GDI_L", "GDI_R")
 vv <- c("DMC", "FAQT", "GDI")
@@ -1123,13 +1142,30 @@ p
 
 ```{r}
 #| label: display-crouch
-#| fig-height: 3.5
+#| fig-height: 4.5
 
 v <- c("KNEE_EXT", "minsta_Kne_Ang_Sag")
 cap = "Degrees"
 p <- plot_development(fd, dat, v, v, cap, devdat)
 p
 ```
+
+#### Probability of Surgery 
+
+```{r}
+#| include: false
+v <- glue("p_{surglist}")
+cap = "Historical Standard"
+p <- plot_development(fd, dat, v, v, cap, devdat)
+```
+
+
+```{r}
+#| label: display-propensity
+#| fig-height: 4.5
+p
+```
+
 :::
 :::
 

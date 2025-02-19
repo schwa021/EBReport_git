@@ -76,7 +76,8 @@ build_pred_outcome_BART <- function(dat, vv, usegait=TRUE){
   ytest <- fsplit_Exam(dat, Exam_ID_test, predvars, vv)$y 
   
   # Build model -----
-  mod <- bartMachine(xtrain, ytrain, use_missing_data = T, serialize = T, seed = 42)
+  mod <-
+    bartMachine(xtrain, ytrain, use_missing_data=T, serialize=T, seed=42, use_missing_data_dummies_as_covars=TRUE)
   
   # Test model -----
   temp <- calc_prediction_intervals(mod, xtest, pi_conf = .90)

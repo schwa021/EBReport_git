@@ -41,9 +41,9 @@ pred_outcome_by_bart <- function(xx, surglist, s, bartlist, vlabs) {
       DR <- effR/sdR
       
       # Get tau > threshold probability -----
-      p_thresh_side <- function(vv, xx, sd){
-        posttau_side <- case_when(sd=="L" ~ posttau[1,], sd=="R" ~ posttau[2,])
-        xx_side <- case_when(sd=="L" ~ xx[1,], sd=="R" ~ xx[2,])
+      p_thresh_side <- function(vv, xx, side_){
+        posttau_side <- case_when(side_=="L" ~ posttau[1,], side_=="R" ~ posttau[2,])
+        xx_side <- case_when(side_=="L" ~ xx[1,], side_=="R" ~ xx[2,])
         thresh <- get_outcome_thresh(vv, xx_side)
         res <- 
           case_when(
@@ -54,8 +54,8 @@ pred_outcome_by_bart <- function(xx, surglist, s, bartlist, vlabs) {
       }
       
       # Build threshold labels -----
-      thresh_lab_side <- function(vv, xx, sd){
-        xx_side <- case_when(sd=="L" ~ xx[1,], sd=="R" ~ xx[2,])
+      thresh_lab_side <- function(vv, xx, side_){
+        xx_side <- case_when(side_=="L" ~ xx[1,], side_=="R" ~ xx[2,])
         thresh <- get_outcome_thresh(vv, xx_side)
         lab <- 
           case_when(

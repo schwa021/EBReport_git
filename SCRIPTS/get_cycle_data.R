@@ -15,14 +15,15 @@ get_cycle_data <- function(c, vnames, Lcyc, Rcyc, typestr, cycle){
   
   # Check for all-zeros - may need to tweak thresholds by typestr --------------
   zero_data <- function(x, typestr){
+    temp <- quantile(abs(x), probs = .90, na.rm = T)
     if(typestr == "Reaction"){
-      if(quantile(abs(x), probs = .90) < .15) x <- rep(NA, length(x))
+      if(temp < .15 | is.na(temp)) x <- rep(NA, length(x))
       return(x) 
     } else if(typestr == "Moment" | typestr == "Power") {
-      if(quantile(abs(x), probs = .90) < .02) x <- rep(NA, length(x))
+      if(temp < .02 | is.na(temp)) x <- rep(NA, length(x))
       return(x) 
     } else {
-      if(quantile(abs(x), probs = .90) < .15) x <- rep(NA, length(x))
+      if(temp < .15 | is.na(temp)) x <- rep(NA, length(x))
       return(x)
     }
   }
