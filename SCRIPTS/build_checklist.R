@@ -136,6 +136,18 @@ build_checklist <- function(surglist, out_all){
     ) %>% 
     tab_options(
       table.font.size = px(12)
+    ) %>% 
+    tab_style(
+      style = cell_borders(
+        side = c("left", "right"),
+        color = "black",
+        weight = px(2)
+      ),
+      locations = cells_body(columns = matches("prop"))
+    ) %>% 
+    sub_missing(
+      columns = everything(),
+      missing_text = "Missing",
     )
   
   return(res)

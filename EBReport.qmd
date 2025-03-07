@@ -39,9 +39,9 @@ execute:
     
 params:
   # MRN: 606085
-  MRN: 683553
+  MRN: 497646
   # Event_Date: "2018-06-21"
-  Event_Date: "2025-02-12"
+  Event_Date: "2025-02-25"
   deid: FALSE
   usevideo: FALSE
   usegait: TRUE
@@ -83,6 +83,7 @@ margin <- ggplot2::margin
 summarize <- dplyr::summarize
 select <- dplyr::select
 formals(table)$useNA <- "ifany"
+
 source("SCRIPTS/read_and_organize.R")
 source("SCRIPTS/addnoise.R")
 source("SCRIPTS/get_TD_NEW.R")
@@ -133,8 +134,8 @@ knitr::knit_hooks$set(crop = knitr::hook_pdfcrop)
 
 # For controlling evaluation -----
 usevideo <- params$usevideo
-
 ```
+
 
 ```{r}
 #| label: read-TD-make-labels
@@ -161,8 +162,8 @@ outcome_setup <-
     out4 = xlabs[out4]
   ) %>% 
   pivot_longer(-surg)
-
 ```
+
 
 ```{r}
 #| label: get-development-data
@@ -174,8 +175,8 @@ devdat <-
   dd |> 
   pivot_longer(-c(vbl, sex, age), names_to = c("pct")) |> 
   mutate(name = vlabs[vbl])
-
 ```
+
 
 ```{r}
 #| label: read-organize-data
@@ -202,8 +203,8 @@ datpre <- readRDS("DATA/FD_2024-05-25.RDS")
 datpre <- read_and_organize(datpre)
 datpre <- get_meanscores(datpre, "Pre")
 datpre <- get_O2_Z(datpre)
-
 ```
+
 
 ```{r}
 #| label: load-or-build-propensity-models
@@ -239,8 +240,8 @@ for (s in surglist) {
     save(slist, file = fmod)
   }
 }
-
 ```
+
 
 ```{r}
 #| label: compute-all-propensities
@@ -266,8 +267,8 @@ if(is.null(dat$p_Femoral_Derotation_Osteotomy)){
   saveRDS(dat, glue("DATA/preprocessed_data_{as.Date(now())}.RDS"))
   saveRDS(dat, glue("DATA/preprocessed_data_current.RDS"))
 }
-
 ```
+
 
 ```{r}
 #| label: read-patient-data
@@ -292,7 +293,6 @@ if(params$usegait){
 }
 
 # Build patient FD and FDpp data -----
-# If there is ONLY afo data, use that -----
 if(is.null(datc3d) & !is.null(datc3d_afo)){
   datc3d <- datc3d_afo
   afoonly <- TRUE
@@ -340,8 +340,7 @@ xpt <- get_O2_Z(xpt)
 if(xpt$dx[1] %in% c("Myelomeningocele")){
   xpt$affected <- factor(TRUE, levels = c("FALSE", "TRUE"))
 }
-
-# Format name and date -----
+  
 if(!params$deid){
   ptname <- glue("{xpt$Child_First} {xpt$Child_Last}")[1]
   ptdate <- format(as.Date(params$Event_Date), "%b %d, %Y")
@@ -351,7 +350,6 @@ if(!params$deid){
   ptdate <- format(as.Date(params$Event_Date), "%b %Y")
   ptmrn <- xpt$Exam_ID[1]
 }
-
 ```
 
 ## `r glue("{ptname}<br>{ptmrn}<br>{ptdate}")`
@@ -365,49 +363,13 @@ if(!params$deid){
 #| label: patient-summary
 #| cache: false
 
-if(!params$deid){
-  tit <- glue("{ptname} ({ptmrn}), Exam Date: {ptdate}")
-} else {
-  tit <- glue("{ptname} ({ptmrn}), Exam Date: {ptdate}")
-}
-
-# Build patient summary data -----
-tdat <- 
-  xpt %>%  
-  filter(SIDE == "L") |> 
-  select(age, dx, dxmod, dxside, GMFCS_meas, FAQ) |> 
-  mutate(age = round(age,1)) |> 
-  rename_with(
-    .fn = ~ vlabs[.],
-    .cols = everything()
-  ) %>% 
-  rename("GMFCS" = "GMFCS (measured)")
-
-
-ptsumm <- 
-  tdat |> 
-  gt() |> 
-  tab_header(tit) |> 
-  tab_style(
-    style = cell_text(align = "center"),
-    locations = list(cells_body(), cells_column_labels())
-  ) |> 
-  tab_style(
-    style = cell_text(weight = "bold"),
-    locations = cells_column_labels()
-  ) |> 
-  cols_width(
-    c(Age, Diagnosis, `Diagnosis Modifier`, GMFCS) ~ px(100),
-    `Functional Assessment Questionnaire` ~ 200
-  )
-
+source("SCRIPTS/build_ptsumm.R")
+ptsumm <- build_ptsumm(params, xpt)
 ptsumm
 
-# Save for external use -----
 if(params$figsave){
   gtsave(ptsumm, "FIGURES/Patient_Summary.png")
 }
-
 ```
 
 ### Patient History
@@ -418,7 +380,6 @@ if(params$figsave){
 
 source("SCRIPTS/get_patient_info.R")
 pi <- get_patient_info(xpt, params$deid) 
-
 ```
 
 ::: {.panel-tabset .nav-pills}
@@ -426,33 +387,30 @@ pi <- get_patient_info(xpt, params$deid)
 
 ```{r}
 pi$tbirth
-# Save for external use -----
+
 if(params$figsave){
   gtsave(pi$tbirth, "FIGURES/Birth_History.png")
 }
-
 ```
 
 #### Gait
 
 ```{r}
 pi$tdev
-# Save for external use -----
+ 
 if(params$figsave){
   gtsave(pi$tdev, "FIGURES/Gait_Development.png")
 }
-
 ```
 
 #### Treatment
 
 ```{r}
 if(!is.null(pi$tsurg)) pi$tsurg
-# Save for external use -----
+
 if(params$figsave){
   gtsave(pi$tsurg, "FIGURES/Treatment_History.png", expand = c(0, 40, 50, 0))
 }
-
 ```
 :::
 
@@ -467,17 +425,11 @@ if(params$figsave){
 
 source("SCRIPTS/build_goaltbl.R")
 
-# Build goal table -----
 t_goal <- build_goaltbl(xpt, datpre)
-
-# Display if GOAL info exists -----
 if(!is.null(t_goal)) t_goal
-
-# Save for external use -----
 if(params$figsave & !is.null(t_goal)){
   gtsave(t_goal, "FIGURES/GOAL_Summary.png")
 }
-
 ```
 
 #### Very Important GOALs
@@ -494,8 +446,6 @@ goal <- get_goal(params)
 
 # Build importance table -----
 t_imp <- build_importanttbl(goal, params)
-
-# Display if GOAL info exists -----
 if(!is.null(t_imp)) t_imp
 
 # Save for external use -----
@@ -517,7 +467,6 @@ v <- c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility",
 cap = ""
 p <- plot_development(fd, dat, v, v, cap, devdat)
 p
-
 ```
 :::
 :::
@@ -547,7 +496,7 @@ vidfile <- temp %>% filter(SIDE == "L") %>% pull(Video_File)
 temp <- list.files(pattern = ".mp4$")
 
 # Use Deidentified video if appropriate -----
-# Deidentified videos created seperately and stored in VIDEO/MRN/
+# Deidentified videos must be created seperately and stored in VIDEO/MRN/
 if(params$deid & params$usevideo){
   res <- str_extract(vidfile, "[^\\\\]+$")
   vidfile <- glue("VIDEO/{params$MRN}/{res}")
@@ -558,30 +507,13 @@ if(!params$deid & !(all(vidlist %in% temp))){
   compress_video(temp, vidlist, vidlabs)
   vidname <- vidlist
 }
-
 ```
 
-```{r}
-#| label: show-video
-#| results: asis
-#| panel: tabset
-#| eval: false
-
-# This is the OLD video tabs code. Leaving it here for now (26AUG2024)
-# for (kk in 1:length(vidlist)) {
-#   cat("\n\n###", str_replace(vidlabs[kk], "_", " + "), "  \n\n")
-#   cat("\n\n <video width=800 controls>
-#   <source src=", vidlist[kk], " type=video/mp4>
-#   </video> \n\n")
-# }
-
-```
 
 ```{r}
 #| label: generate-html-video-code
 #| cache: false
 #| eval: !expr usevideo
-
 
 # If deidentified, fix mkr file name -----
 # TODO
@@ -589,7 +521,6 @@ if(!params$deid & !(all(vidlist %in% temp))){
 # Generate the code for the video tabs -----
 source("SCRIPTS/build_video_tabs.R")
 build_video_tabs(vidlist, vidfile)
-
 ```
 
 ```{r}
@@ -599,11 +530,10 @@ build_video_tabs(vidlist, vidfile)
 #| echo: false
 
 # Display the video tabs -----
-# Quarto does not support chapters, so we generate HTML and display it directly
+# Note: Quarto does not support chapters. We generate HTML and display it directly
 code <- readLines("video_tab_code.txt")
 code <- paste(code, collapse = "\n")
 cat(paste0("```{=html}\n", code, "\n```"))
-
 ```
 
 ## Treatment Assignment
@@ -636,7 +566,6 @@ for (s in surglist) {
 
 xL <- xpt |> filter(SIDE == "L")
 xR <- xpt |> filter(SIDE == "R")
-
 ```
 
 ```{r}
@@ -661,7 +590,6 @@ proptbl
 if(params$figsave){
   gtsave(proptbl, "FIGURES/Propensity_Profile.png", expand = c(10, 10, 10, 10))
 }
-
 ```
 
 ```{r}
@@ -683,27 +611,25 @@ for (s in surglist) {
     shap_all[[s]] <- res 
   }
 }
-
 ```
 
 ```{r}
 #| label: format-propensity-details
 #| cache: false
-
+#| 
 ptprops <- bind_rows(propL, propR)
 shap_tables <- list()
 for (s in surglist) {
   shap_tables[[s]] <- fmt_shapLR(shap_all, ptprops, s)
 }
-
 ```
 
 ```{r}
 #| label: add-outcome-models-if-needed
 #| eval: false
 
-# This code chunk checks if a new outcome model is needed -----
-# New outcome models can also be added manually
+# NOTE: eval: false by default
+# New outcome models can be added manually
 #   (1) Add predictors to SCRIPTS/get_pred_vars.R
 #   (2) Adust vnew below to include new outcome name(s) 
 #   (3) Run this chunk of code
@@ -723,37 +649,36 @@ bartlist_nogait <- readRDS("DATA/outcome_models_bartlist_nogait.RDS")
 # Add (top) automatically or (bottom) manually -----
 vnew <- NULL
 # vnew <- v[!(v %in% names(bartlist))]
-# vnew <- NULL
-# vnew <- c("minsta_Ank_Ang_Sag")
 
 # Re-calculate existing -----
 # vnew <- names(bartlist)
 
 # Fit and Save Models -----
-if(length(vnew) > 0){
-  temp <- vnew %>% map(\(v) build_pred_outcome_BART(dat, v, usegait=TRUE), .progress = TRUE)
+if(length(vnew) > 0) {
+  temp <- 
+    vnew %>% 
+    map(\(v) build_pred_outcome_BART(dat, v, usegait=TRUE), .progress=TRUE)
   names(temp) <- vnew
   bartlist <- c(bartlist, temp)
   saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
   
-  temp <- vnew %>% map(\(v) build_pred_outcome_BART(dat, v, usegait=FALSE), .progress = TRUE)
+  temp <- 
+    vnew %>% 
+    map(\(v) build_pred_outcome_BART(dat, v, usegait=FALSE), .progress=TRUE)
   names(temp) <- vnew
   bartlist_nogait <- c(bartlist_nogait, temp)
   saveRDS(bartlist, "DATA/outcome_models_bartlist_nogait.RDS")
 }
-
 ```
 
 ```{r}
 #| label: predict-outcome-for-patient
 #| cache: false
 
-# source("SCRIPTS/build_pred_outcome_BART.R")
 bartlist <- readRDS("DATA/outcome_models_bartlist.RDS")
 bartlist_nogait <- readRDS("DATA/outcome_models_bartlist_nogait.RDS")
 
 # Find variables needed for BART models, and add NA for missing variables -----
-# This is for kids without gait data
 for (v in names(bartlist)) {
   vmod <- names(bartlist[[v]]$mod$X)
   vx <- names(xpt)
@@ -782,6 +707,33 @@ for (ss in surglist) {
 # Arrange outcomes as tibble -----
 out_all <- temp %>% list_rbind()
 
+# Remove outcomes if pre value is missing (e.g., FAQT) -----
+outvars <- unique(out_all$var)
+outL <- xL %>% select(all_of(outvars))
+outR <- xR %>% select(all_of(outvars))
+missL <- is.na(outL)
+missR <- is.na(outR)
+out_all <- 
+  out_all %>% 
+    mutate(
+      across(
+        matches("pct|^tau"),
+        ~ case_when(
+          side == "L" & var %in% outvars[missL] ~ NA,
+          TRUE ~ .
+        )
+      )
+    ) %>% 
+    mutate(
+      across(
+        matches("pct|^tau"),
+        ~ case_when(
+          side == "R" & var %in% outvars[missL] ~ NA,
+          TRUE ~ .
+        )
+      )
+    )
+
 ```
 
 ```{r}
@@ -797,10 +749,7 @@ datsave <-
     shap_tables = shap_tables,
     out_all = out_all
   )
-
-# Save xpt, propL/R, etc... using params$MRN and params$Event_Date in name -----
 saveRDS(datsave, glue("EBData_{params$MRN}_{params$Event_Date}.RDS"))
-
 ```
 
 ```{r}
@@ -880,10 +829,10 @@ for (s in surglist) {
 
 ### Summary Checklist 
 
-For each side we report whether (1) surgery meets the historical standard of practice, and (2) surgery is likely to have a clinically relevant effect at the levels of body structure, focal kinematics, overall kinematics, and mobility.
+For each side we report whether (1) surgery meets the historical standard of practice, and (2) surgery is likely to have a clinically relevant effect at the levels of body structure, focal kinematics, overall kinematics, and mobility.  
 
 > <center>![](DATA/caution.jpeg){width="2in"}\
-> Check **Clinical Reasoning** and **Outcome Predictions** for details</center>
+> Check **Clinical Reasoning** and **Outcome Predictions** tab for additional information.*</center>
 
 ```{r}
 #| cache: false
@@ -892,7 +841,6 @@ For each side we report whether (1) surgery meets the historical standard of pra
 source("SCRIPTS/build_checklist.R")
 checklist <- build_checklist(surglist, out_all)
 checklist
-
 ```
 
 ### Propensity Profile

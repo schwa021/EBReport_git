@@ -90,7 +90,7 @@ fmt_shapLR <- function(tall, ptprops, s){
       locations = cells_column_spanners(spanners = "R")
     ) |> 
     cols_width(
-      starts_with("value") ~ px(130),
+      starts_with("value") ~ px(145),
       starts_with("lab") ~ px(230),
       "blank" ~ px(20)
     ) |> 
