@@ -47,10 +47,22 @@ params:
   usegait: TRUE
   figsave: FALSE
   custom_outcome: FALSE
+  username: ""
+  password: ""
   
 editor_options: 
   chunk_output_type: console
 ---
+
+```{r}
+
+# cat("Username ", params$username)
+# cat("Password ", params$password)
+# library(RODBC)
+# con2 <- 
+#   odbcConnect("Azure_Connection", uid = params$username, pwd = params$password)
+
+```
 
 ```{r}
 #| label: libraries-themes-etc
@@ -60,7 +72,6 @@ editor_options:
 
 source("SCRIPTS/setup_load_source.R")
 ```
-
 
 ```{r}
 #| label: read-TD-make-labels

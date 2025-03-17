@@ -7,6 +7,8 @@ ui <- fluidPage(
   # UI elements for parameter input
   textInput("MRN", "MRN", "606085"),
   textInput("Event_Date", "Event Date", "2018-06-21"),
+  textInput("username", "User Name", "mschwartz@gillettechildrens.com"),
+  passwordInput("password", "Password", "Duffy001!))))))))"),
   checkboxInput("deid", "Deidentify?", value = FALSE),
   checkboxInput("usevideo", "Include Video?", value = TRUE),
   checkboxInput("figsave", "Save Figures?", value = FALSE),
@@ -29,7 +31,9 @@ server <- function(input, output, session) {
       usevideo = input$usevideo,
       figsave = input$figsave,
       usegait = input$usegait,
-      custom_outcome = input$custom_outcome
+      custom_outcome = input$custom_outcome,
+      username = input$username,
+      password = input$password
     )
     
     # Template
