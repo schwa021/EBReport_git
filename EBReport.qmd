@@ -47,8 +47,8 @@ params:
   usegait: TRUE
   figsave: FALSE
   custom_outcome: FALSE
-  username: "mschwartz@gillettechildrens.com"
-  password: "Duffy001!))))))))"
+  username: ""
+  password: ""
   
 editor_options: 
   chunk_output_type: console
