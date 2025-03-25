@@ -80,6 +80,7 @@ source("SCRIPTS/plot_patient_knm_history.R")
 source("SCRIPTS/get_LLD.R")
 source("SCRIPTS/plot_patient_knmafo.R")
 source("SCRIPTS/remove_missing_outcome.R")
+source("SCRIPTS/compute_FAQT.R")
 
 # Theme for ggplot2 -----
 theme_mhs <- theme_minimal(base_size = 7) 

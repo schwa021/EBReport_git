@@ -39,30 +39,20 @@ execute:
     
 params:
   # MRN: 606085
-  MRN: 497646
+  MRN: 501774
   # Event_Date: "2018-06-21"
-  Event_Date: "2025-02-25"
+  Event_Date: "2025-03-21"
   deid: FALSE
   usevideo: FALSE
   usegait: TRUE
   figsave: FALSE
   custom_outcome: FALSE
-  username: ""
-  password: ""
+  username: "mschwartz@gillettechildrens.com"
+  password: "Duffy001!))))))))"
   
 editor_options: 
   chunk_output_type: console
 ---
-
-```{r}
-
-# cat("Username ", params$username)
-# cat("Password ", params$password)
-# library(RODBC)
-# con2 <- 
-#   odbcConnect("Azure_Connection", uid = params$username, pwd = params$password)
-
-```
 
 ```{r}
 #| label: libraries-themes-etc
@@ -187,18 +177,17 @@ for (s in surglist) {
 # Compute propensities -----
 if(is.null(dat$p_Femoral_Derotation_Osteotomy)){
   for (s in surglist) {
+    cat("Computing Propensity for Surgery ", s, "\n")
     load(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))
     mod <- slist[[1]]
     load(glue("OUTPUT/Propensity_Models/prop_{s}_nogait.RDATA"))
     mod_nogait <- slist[[1]]
-    
-    cat("Computing Propensity for Surgery ", s, "\n")
-    # mod <- get(glue("mod_{s}"))
     set.seed(42)
-    dat[[glue("p_{s}")]] <- predict(mod, dat[names(mod$X)])
-    # mod <- get(glue("mod_{s}_nogait"))
+    dat[[glue("p_{s}")]] <- 
+      predict(mod, dat[names(mod$X)])
     set.seed(42)
-    dat[[glue("p_{s}_nogait")]] <- predict(mod_nogait, dat[names(mod_nogait$X)])
+    dat[[glue("p_{s}_nogait")]] <- 
+      predict(mod_nogait, dat[names(mod_nogait$X)])
   }
   saveRDS(dat, glue("DATA/preprocessed_data_{as.Date(now())}.RDS"))
   saveRDS(dat, glue("DATA/preprocessed_data_current.RDS"))
@@ -229,6 +218,7 @@ if(is.null(datc3d) & !is.null(datc3d_afo)){
   afoonly <- TRUE
   plotgait <- TRUE
 }
+
 fd <- make_FD_one(datc3d, params$MRN)
 
 # Restrict to Current date and before (useful for processing old studies) -----
@@ -261,11 +251,24 @@ xpt <-
   ) |>
   read_and_organize()
 
+# Compute all FAQT (until AJR builds it into pipeline) -----
+temp <- fd$FD
+eid <- unique(temp$Exam_ID)
+xx <- list()
+for (ee in eid) {
+  xx[[ee]] <- temp %>% filter(Exam_ID == ee)
+  xx[[ee]] <- compute_FAQT(xx[[ee]])
+}
+fd$FD <- list_rbind(xx)
+
 # Add average spa, sel, str, wb, nwb -----
 xpt <- get_meanscores(xpt, "Pre")
 
 # Get oxygen net pct and z scores -----
 xpt <- get_O2_Z(xpt)
+
+# Compute FAQT -----
+xpt <- compute_FAQT(xpt)
 
 # If diagnosis is Myelo - make affected side Bilateral -----
 if(xpt$dx[1] %in% c("Myelomeningocele")){
