@@ -5,12 +5,8 @@ get_outcome_thresh <- function(vv, xx_side){
   
   thresh <- 
     case_when(
-      vv == "ANTEVERSION" ~ c(10, -1),
-      vv == "meansta_Hip_Ang_Trn" ~ c(5, -1),
       vv == "GDI" ~ c(5, 1),
       vv == "FAQT" ~ c(5, 1),
-      vv == "BIMAL" ~ c(5, 0),
-      vv == "meansta_Kne_Ang_Trn" ~ c(5, 0),
       vv == "HIP_EXT" ~ c(5, -1),
       vv == "minsta_Hip_Ang_Sag" ~ c(5, -1),
       vv == "POP_ANG_UNI" ~ c(5, -1),
@@ -28,8 +24,12 @@ get_outcome_thresh <- function(vv, xx_side){
       vv == "maxswi_Kne_Ang_Sag" ~ c(5, 1),
       vv == "avgwb" ~ c(.25, -1),
       vv == "avgnwb" ~ c(.25, -1),
-      vv == "meansta_Foo_Ang_Trn" ~ c(5, 0),
-      vv == "meanswi_Foo_Ang_Trn" ~ c(5, 0)
+      vv == "meanswi_Foo_Ang_Trn" ~ c(5, -1),
+      vv == "ANTEVERSION" ~ c(10, 0),
+      vv == "BIMAL" ~ c(5, 0),
+      vv == "meansta_Hip_Ang_Trn" ~ c(5, 0),
+      vv == "meansta_Kne_Ang_Trn" ~ c(5, 0),
+      vv == "meansta_Foo_Ang_Trn" ~ c(5, 0)
     )
   
   # Guess signs for BIMAL -----
@@ -37,7 +37,7 @@ get_outcome_thresh <- function(vv, xx_side){
     thresh[2] <- case_when(
       xx_side$BIMAL > 30 ~ -1,
       xx_side$BIMAL < 0 ~ 1,
-      TRUE ~ 0
+      TRUE ~ 1
     )
   }
   
@@ -45,7 +45,7 @@ get_outcome_thresh <- function(vv, xx_side){
   if(vv == "ANTEVERSION"){
     thresh[2] <- case_when(
       xx_side$ANTEVERSION < 10 ~ 1,
-      TRUE ~ thresh[2]
+      TRUE ~ -1
     )
   }
   
@@ -54,7 +54,7 @@ get_outcome_thresh <- function(vv, xx_side){
     thresh[2] <- case_when(
       xx_side$meansta_Kne_Ang_Trn > 8 ~ -1,
       xx_side$meansta_Kne_Ang_Trn < -27 ~ 1,
-      TRUE ~ thresh[2]
+      TRUE ~ 1
     )
   }
   
@@ -62,7 +62,7 @@ get_outcome_thresh <- function(vv, xx_side){
   if(vv == "meansta_Hip_Ang_Trn"){
     thresh[2] <- case_when(
       xx_side$meansta_Hip_Ang_Trn < -13 ~ 1,
-      TRUE ~ thresh[2]
+      TRUE ~ -1
     )
   }
   
@@ -71,7 +71,7 @@ get_outcome_thresh <- function(vv, xx_side){
     thresh[2] <- case_when(
       xx_side$meansta_Foo_Ang_Trn > 11 ~ -1,
       xx_side$meansta_Foo_Ang_Trn < -31 ~ 1,
-      TRUE ~ thresh[2]
+      TRUE ~ -1
     )
   }
   

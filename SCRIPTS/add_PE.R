@@ -29,7 +29,7 @@ add_PE <- function(FD, PE.tbl){
   
   FD <- bind_rows(FD_L, FD_R)
   
-  temp <- c("BUN_DEF", "CONFUSION_TEST", "LIGAM_LAXITY", "PATELLA_ALTA", "OBER", "FIR_MTP_DF")
+  temp <- c("BUN_DEF", "CONFUSION_TEST", "LIGAM_LAXITY", "OBER", "FIR_MTP_DF")
   FD <- FD %>%
     mutate(across(
       all_of(temp),
@@ -45,6 +45,21 @@ add_PE <- function(FD, PE.tbl){
         T ~ .
       ))) %>% 
     mutate(across(all_of(temp), ~ factor(., levels = c("N", "Y", "RES", "TYP", "HYP", "Missing"))))
+  
+  # Fix the PATELLA_ALTA variable - formerly had "res" and "hyp" levels (MHS 23/APR/2025)
+  temp <- c("PATELLA_ALTA")
+  FD <- FD %>%
+    mutate(across(
+      all_of(temp),
+      ~ case_when(
+        . == "U" ~ "Missing",
+        . == "u" ~ "Missing",
+        . == "y" ~ "Y",
+        . == "n" ~ "N",
+        . == "-99" ~ "Missing",
+        T ~ .
+      ))) %>% 
+    mutate(across(all_of(temp), ~ factor(., levels = c("N", "Y", "Missing"))))
   
   # Add/fix SIDE
   FD <- FD %>%

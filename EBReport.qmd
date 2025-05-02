@@ -6,12 +6,13 @@ Date: ""
 
 format:
   html:
+    dev: ragg_png
     toc: true
     toc-depth: 3
     toc-location: left
     toc-title: "Section"
     output-file: "EBReport_MRN_YYYY-MM-DD.html"
-    fig-dpi: 600
+    fig-dpi: 300
     embed-resources: true
     theme:
       - cosmo
@@ -38,17 +39,17 @@ execute:
   error: false
     
 params:
-  # MRN: 606085
-  MRN: 501774
-  # Event_Date: "2018-06-21"
-  Event_Date: "2025-03-21"
+  MRN: 668551
+  # MRN: 488909
+  Event_Date: "2025-05-01"
+  # Event_Date: "2023-07-19"
   deid: FALSE
   usevideo: FALSE
   usegait: TRUE
   figsave: FALSE
   custom_outcome: FALSE
-  username: ""
-  password: ""
+  username: "mschwartz@gillettechildrens.com"
+  password: "Duffy001!))))))))"
   
 editor_options: 
   chunk_output_type: console

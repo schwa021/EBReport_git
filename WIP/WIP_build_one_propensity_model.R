@@ -1,7 +1,31 @@
 
-s <- "Neural_Rhizotomy"
+# This function calculates several diagnostic metrics for a given threshold -----
+calculate_metrics <- function(threshold, data, cost) {
+  predicted_positive <- data$probabilities >= threshold
+  actual_positive <- data$actual_classes == 1
+  prev <- sum(data$actual_classes==1)/nrow(data)
+  
+  TP <- sum(predicted_positive & actual_positive) |> as.double()
+  FP <- sum(predicted_positive & !actual_positive) |> as.double()
+  TN <- sum(!predicted_positive & !actual_positive) |> as.double()
+  FN <- sum(!predicted_positive & actual_positive) |> as.double()
+  
+  sens <- TP / (TP + FN)
+  spec <- TN / (TN + FP)
+  ppv <- TP / (TP + FP)
+  npv <- TN / (TN + FN)
+  MCC <- ((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN))
+  
+  return(c(thresh = threshold, acc = (TP + TN) / (nrow(data)), TP = TP, FP = FP,
+           TN = TN, FN = FN, ppv = ppv, npv = npv, sens = sens, spec = spec,
+           J = sens + spec - 1, d2 = (1 - sens)^2 + ((1-prev)/(cost*prev))*(1 - spec)^2,
+           MCC = MCC, FPminusFN = cost * FP - FN))
+}
+
+s <- "Femoral_Derotation_Osteotomy"
 surg <- glue("interval_{s}")
 prop_vars <- c(get_prop_model_vars(s), "rnd")
+prop_vars <- c("age", "FemTor", "meansta_Hip_Ang_Trn", "meansta_Foo_Ang_Trn", "Sex")
 fp2fn=1
 df <- 
   dat %>% 
@@ -133,7 +157,7 @@ mod_test <- mod_wt
 # Train model no dx-----
 mod_x <-
   bartMachine(
-    xtrainbal %>% select(ADDUCTOR_SPAS),
+    xtrainbal,
     ytrainbal,
     use_missing_data = T,
     serialize = T,

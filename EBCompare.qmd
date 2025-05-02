@@ -1,0 +1,625 @@
+---
+title: "Comparing Three Machine Learning Models"
+sutitle: "BART vs. CART vs. Naive Bayes"
+Author: ""
+Date: ""
+
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    toc-title: "Section"
+    output-file: "EBCompare_MRN_YYYY-MM-DD.html"
+    fig-dpi: 600
+    embed-resources: true
+    theme:
+      - cosmo
+    grid:
+      body-width: 1050px
+      sidebar-width: 250px
+      margin-width: 0px
+      
+execute:
+  echo: false
+  warning: false
+  message: false
+  error: false
+  
+params:
+  MRN: 616480
+  Event_Date: "2025-04-25"
+  fit_prop: false
+  fit_out: false
+  
+editor_options: 
+  chunk_output_type: console
+  
+---
+
+```{r}
+#| label: load-libraries-etc
+#| include: false
+
+# ---- Libraries -----
+options(java.parameters = "-Xmx8g")
+library(bartMachine)
+library(tidyverse)
+library(naivebayes)
+library(yardstick)
+library(glue)
+library(colorspace)
+library(iml)
+library(gt)
+library(patchwork)
+library(rpart)
+library(rpart.plot)
+library(tidymodels)
+
+# ---- User written functions from EB GAIT ----
+source("SCRIPTS/get_prop_model_vars.R")
+source("SCRIPTS/get_pred_model_vars.R")
+source("SCRIPTS/get_outcome_thresh.R")
+source("SCRIPTS/get_varlabs.R")
+source("SCRIPTS/fmt_shapLR.R")
+source("SCRIPTS/ptableLR.R")
+source("SCRIPTS/get_outcome_vars.R")
+source("SCRIPTS/get_outcome_thresh.R")
+
+# ---- User written functions for comparing Naive Bayes to BART ----
+# source("SCRIPTS/functions_for_comparing_models.R")
+list.files("SCRIPTS/COMPARE", pattern = "\\.R$", full.names = TRUE) %>% 
+  purrr::walk(source)
+
+# ---- List of surgeries ----
+surglist <- c("Neural_Rhizotomy", "Rectus_Transfer",
+              "Psoas_Release", "Hams_Lengthening", "Adductor_Release", 
+              "Gastroc_Soleus_Lengthening",
+              "Femoral_Derotation_Osteotomy", "Tibial_Derotation_Osteotomy",  
+              "DFEO_Patellar_Advance", "Patellar_Advance", 
+              "Foot_and_Ankle_Bone", "Foot_and_Ankle_Soft_Tissue")
+
+# ---- Variable labels ----
+list2env(get_varlabs(), envir = .GlobalEnv)
+
+# ---- Load BART Outcome Models ----
+outbart <- read_rds("DATA/outcome_models_bartlist.RDS")
+
+# ---- Load BART Propensity Models ----
+prop_list_BART <- list()
+for (ss in surglist) {
+  file_path <- file.path("OUTPUT/Propensity_Models", paste0("prop_", ss, ".RDATA"))
+  load(file_path)
+  prop_list_BART[[ss]] <- slist[[paste0("mod_", ss)]]
+}
+
+# ---- Data ----
+dat <- readRDS("DATA/preprocessed_data_current.RDS")
+dat <- dat %>% mutate(rowid = row_number())
+datpre <- readRDS("DATA/FD_2024-05-25.RDS")
+datpre <- datpre %>% mutate(rowid = row_number())
+
+# ---- Load patient ----
+ptdatfile <- glue("EBData_{params$MRN}_{params$Event_Date}.RDS")
+
+file_root <- file.exists(ptdatfile)
+file_reports <- file.exists(glue("REPORTS/{ptdatfile}"))
+if(file_root) {
+  ptdat <- readRDS(ptdatfile)
+} else {
+  ptdat <- readRDS(glue("REPORTS/{ptdatfile}"))
+}
+# ptdat <- readRDS("REPORTS/EBData_488909_2023-07-19.RDS")
+# ptdat <- readRDS("REPORTS/EBData_466930_2025-04-17.RDS")
+xpt <- 
+  ptdat$xpt %>% 
+  mutate(across(where(is.factor), ~ factor(., levels = levels(dat[[cur_column()]]))))
+
+# ---- Load previously fit propensity and outcome models ----
+temp <- readRDS("OUTPUT/Comparison_Models/out_list_2024-05-25.RDS")
+list2env(temp, envir = .GlobalEnv)
+temp <- readRDS("OUTPUT/Comparison_Models/prop_list_2024-05-25.RDS")
+list2env(temp, envir = .GlobalEnv)
+
+```
+
+```{r}
+#| label: build-NB-propensity-models
+#| include: false
+
+# Build Naive Bayes propensity models ----
+if(params$fit_prop){
+  prop_list_NB <-
+    surglist %>%
+    map(build_prop_NB, df=dat, prop_list_BART=prop_list_BART, .progress=TRUE) %>%
+    setNames(surglist)
+}
+
+```
+
+```{r}
+#| label: build-CART-propensity-models
+#| include: false
+
+# Build CART propensity models ----
+if(params$fit_prop){
+  prop_list_CART <-
+    surglist %>%
+    map(build_prop_CART, df=dat, prop_list_BART=prop_list_BART, .progress=TRUE) %>%
+    setNames(surglist)
+}
+
+```
+
+```{r}
+#| label: save-propensity-models
+#| include: false
+
+if(params$fit_prop){
+  savelist <-
+    list(
+      prop_list_BART = prop_list_BART,
+      prop_list_CART = prop_list_CART,
+      prop_list_NB = prop_list_NB
+    )
+  saveRDS(savelist, "Output/Comparison_Models/prop_list_2024-05-25.RDS",
+          compress = FALSE)
+}
+
+```
+
+## Propensity Model Performance 
+#### BART vs. CART vs. Naive Bayes
+
+```{r}
+#| label: compare-performance-Naive-vs-BART
+#| out-height: 75%
+#| out-width: 75%
+#| fig-align: center
+#| eval: false
+
+perf_list <-
+  surglist %>%
+  map(
+    perf_compare_NB_CART_BART,
+    NBlist = prop_list_NB,
+    CARTlist = prop_list_CART,
+    BARTlist = prop_list_BART,
+    .progress = TRUE
+  ) %>%
+  setNames(surglist)
+
+temp <- lapply(perf_list, function(x) x$plt)
+
+# Create the 4 x 3 grid using patchwork
+prop_perf_plt <- 
+  wrap_plots(temp, ncol=3) + 
+  plot_annotation(title = "Propensity Model Performance: Bart vs. CART vs. Naive Bayes") +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")
+
+prop_perf_plt
+
+```
+
+```{r}
+#| label: build-outcome-models-cart
+#| include: false
+
+# ---- Build categorical outcome models using CART ----
+if(params$fit_out){
+  voutlist <- surglist %>% map(get_outcome_vars) %>% unlist() %>% unique()
+  out_list_CART <-
+    voutlist %>%
+    map(model_outcome_CART, df=dat, outbart=outbart, .progress=TRUE) %>%
+    setNames(voutlist)
+}
+
+```
+
+```{r}
+#| label: build-outcome-models-naive-bayes
+#| include: false
+
+# ---- Build categorical outcome models using Naive Bayes ----
+if(params$fit_out){
+  voutlist <- surglist %>% map(get_outcome_vars) %>% unlist() %>% unique()
+  out_list_NB <-
+    voutlist %>%
+    map(model_outcome_NB, df=dat, outbart=outbart, .progress=TRUE) %>%
+    setNames(voutlist)
+}
+
+```
+
+```{r}
+#| label: build-outcome-models-bart
+#| include: false
+
+# ---- Build categorical outcome models using BART ----
+if(params$fit_out){
+  voutlist <- surglist %>% map(get_outcome_vars) %>% unlist() %>% unique()
+  out_list_BART <-
+    voutlist %>%
+    map(model_outcome_BART, outbart=outbart, df=dat, .progress=TRUE) %>%
+    setNames(voutlist)
+}
+
+```
+
+```{r}
+#| label: save-outcome-models
+#| include: false
+
+if(params$fit_out){
+  savelist <- 
+    list(
+      out_list_BART = out_list_BART,
+      out_list_CART = out_list_CART,
+      out_list_NB = out_list_NB
+    )
+  saveRDS(savelist, "Output/Comparison_Models/out_list_2024-05-25.RDS", 
+          compress = FALSE)
+}
+
+```
+
+## Outcome Model Performance
+#### BART vs. CART vs. Naive Bayes
+
+```{r}
+#| label: build-outcome-comparison-plot
+#| fig-align: center
+#| eval: false
+
+# Build categorical outcome comparison plot ----
+voutlist <- surglist %>% map(get_outcome_vars) %>% unlist() %>% unique()
+plt <- list()
+for (var in voutlist) {
+  temp <- bind_rows(out_list_NB[[var]]$perf, out_list_BART[[var]]$perf,
+                    out_list_CART[[var]]$perf)
+  temp$.metric[temp$.metric=="bal_accuracy"] <- "balacc"
+  temp$.metric[temp$.metric=="f_meas"] <- "f"
+  temp$.metric <- factor(temp$.metric, levels = c("balacc", "f", "sens", "spec", "ppv", "npv"))
+  temp <- temp %>% filter(.metric %in% c("ppv", "npv"))
+  
+  plt[[var]] <- 
+    ggplot(temp, aes(x=.metric, y=.estimate, fill = model)) + 
+    geom_col(width=.6, lwd=.05, color="grey5", position = position_dodge(width=.6), alpha=.9) +
+    coord_cartesian(ylim = c(0, 1)) +
+    labs(title = str_wrap(vlabs[var], 25), y = "", x = "", fill="Model") +
+    scale_fill_discrete_diverging(l1=30, l2=65, c1=70) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = rel(.5), face = "bold"),
+      axis.title = element_text(size = rel(.5), face = "bold"),
+      axis.text.x = element_text(size = rel(.5)),
+      axis.text.y = element_text(size = rel(.5)),
+      legend.text = element_text(size = rel(.5)),
+      legend.title = element_text(size = rel(.7)),
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(color="grey85", linewidth=.1)
+    )
+}
+
+# Display categorical outcome model performance comparison ----
+out_perf_plot <- 
+  wrap_plots(plt, ncol = 4) + 
+  plot_annotation(
+    title = "",
+    caption = "Outcome based on change exceeding threshold"
+  ) + 
+  plot_layout(guides = "collect") & 
+  theme(legend.position = "bottom")
+
+# out_perf_plot
+
+ggsave("junk.png", width = 8, height = 10, dpi = 600, bg = "white")
+
+```
+
+![](junk.png){width=672 height=864 fig-align="center"}
+
+## Treatment Propensities for Patient
+
+```{r}
+#| label: compare-propensity-patient
+#| include: false
+
+# ---- Get propensity scores for NB, CART ----
+ypt_prob_NB <- 
+  surglist %>% 
+  map(pred_pt_surg, mod_list=prop_list_NB, xpt=xpt) %>% 
+  setNames(surglist)
+
+ypt_prob_CART <- 
+  surglist %>% 
+  map(pred_pt_surg, mod_list=prop_list_CART, xpt=xpt) %>% 
+  setNames(surglist)
+
+# ---- Format scores into a table ----
+ptprops_NB <- build_ptprop(ypt_prob_NB)
+proptbl_NB <- format_proptable_pt(ptprops_NB)
+ptprops_CART <- build_ptprop(ypt_prob_CART)
+proptbl_CART <- format_proptable_pt(ptprops_CART)
+
+# ---- Format BART data from ptdat ----
+ptprops_BART <- 
+  ptdat$propL %>% 
+  bind_rows(ptdat$propR) %>% 
+  mutate(SIDE = ifelse(SIDE == "L", "Left", "Right"))
+proptbl_BART <- format_proptable_pt(ptprops_BART)
+
+```
+
+::: {.panel-tabset .nav-pills} 
+#### BART 
+```{r}
+#| label: proptable-bart
+proptbl_BART
+```
+#### CART 
+```{r}
+#| label: proptable-cart
+proptbl_CART
+```
+#### Naive Bayes 
+```{r}
+#| label: proptable-naive-bayes
+proptbl_NB
+```
+:::
+
+```{r}
+#| label: plot-feature-contributions-logodds
+#| include: false
+
+# ---- Get logodds for Naive Bayes ----
+plt_logodds_L <- 
+  surglist %>% 
+  map(contribution_plot_logodds, mod_list=prop_list_NB, df_list=df_list, 
+      side="Left", ypt_prob=ypt_prob_NB) %>% 
+  setNames(surglist)
+
+plt_logodds_R <- 
+  surglist %>% 
+  map(contribution_plot_logodds, mod_list=prop_list_NB, df_list=df_list, 
+      side="Right", ypt_prob=ypt_prob_NB) %>% 
+  setNames(surglist)
+
+# ---- Build log-odds contribution plots ----
+plt_logodds <- list()
+for (ss in surglist) {
+  plt_logodds[[ss]] <- plt_logodds_L[[ss]] + plt_logodds_R[[ss]] + 
+    plot_layout(ncol = 2) +
+    plot_annotation(title = glue("{vlabs[ss]} Probability")) &
+    theme(
+      plot.title.position = "plot",
+      plot.title = element_text(size = rel(.8), face = "bold"),
+      plot.margin = margin(5, 10, 5, 10), 
+      aspect.ratio = 1.
+    )
+}
+
+```
+
+## Clinical Reasoning for Patient
+
+::: {.panel-tabset .nav-pills}
+
+### Likelihood Ratio - Naive Bayes  
+::: {.panel-tabset .nav-pills group="treatment"}
+```{r}
+#| label: contribution-by-log-odds
+#| results: asis
+#| fig-height: 3.25
+
+# ---- Log-odds contribution tabs ----
+tabnames <- vlabs[names(plt_logodds)]
+for (kk in seq_along(tabnames)) {
+  cat("####", tabnames[[kk]], "\n\n")
+  print(plt_logodds[[kk]])
+  cat("\n\n")
+}
+
+```
+:::
+
+```{r}
+#| label: get-shapley-nb
+#| include: false
+#| eval: true
+
+# ---- Get shapley values for Naive Bayes ----
+shap_all_NB <- 
+  surglist %>% 
+  map(prop_shap_table_NB, xpt=xpt, mod_list=prop_list_NB, .progress=TRUE) %>% 
+  setNames(surglist)
+
+# ---- Format shapley values for Naive Bayes ----
+shap_tables_NB <- 
+  surglist %>% 
+  map(fmt_shapLR_NB, tall = shap_all_NB, ptprops = ptprops_NB) %>% 
+  setNames(surglist)
+
+```
+
+```{r}
+#| label: get-shapley-cart
+#| include: false
+#| eval: true
+
+# ---- Get shapley values for CART ----
+shap_all_CART <- 
+  surglist %>% 
+  map(prop_shap_table_CART, xpt=xpt, mod_list=prop_list_CART, .progress=TRUE) %>% 
+  setNames(surglist)
+
+# ---- Format shapley values for CART ----
+shap_tables_CART <- 
+  surglist %>% 
+  map(fmt_shapLR_NB, tall = shap_all_CART, ptprops = ptprops_CART) %>% 
+  setNames(surglist)
+
+```
+
+### Shapley Values - BART 
+::: {.panel-tabset .nav-pills group="treatment"} 
+```{r}
+#| label: display-propensity-details-BART
+#| results: asis
+
+# ---- Display Shapley values BART ----
+tabnames <- vlabs[surglist]
+for (kk in surglist) {
+  cat("####", tabnames[[kk]], "\n\n")
+  print(ptdat$shap_tables[[kk]])
+  cat("\n\n")
+}
+
+```
+:::
+
+### Shapley Values - CART 
+::: {.panel-tabset .nav-pills group="treatment"} 
+```{r}
+#| label: display-propensity-details-cart
+#| results: asis
+
+# ---- Display Shapley values CART ----
+tabnames <- vlabs[surglist]
+for (kk in surglist) {
+  cat("####", tabnames[[kk]], "\n\n")
+  print(shap_tables_CART[[kk]])
+  cat("\n\n")
+}
+
+```
+
+:::
+### Shapley Values - Naive Bayes 
+::: {.panel-tabset .nav-pills group="treatment"} 
+```{r}
+#| label: display-propensity-details-naive
+#| results: asis
+
+# ---- Display Shapley values NB ----
+tabnames <- vlabs[surglist]
+for (kk in surglist) {
+  cat("####", tabnames[[kk]], "\n\n")
+  print(shap_tables_NB[[kk]])
+  cat("\n\n")
+}
+
+```
+:::
+:::
+
+## Predict Outcome Categories for Patient 
+
+```{r}
+#| label: predict-outcome-patient-BART
+
+# ---- Predict outcomes with BART ----
+out_pt_BART <- 
+  surglist %>% 
+  map(pred_pt_outcome_BART, xx=xpt, out_list_BART=out_list_BART) %>% 
+  bind_rows()
+
+```
+
+```{r}
+#| label: format-outcome-patient-BART
+
+ptprops_BART <- 
+  bind_rows(ptdat$propL, ptdat$propR) %>% 
+  mutate(SIDE = ifelse(SIDE == "L", "Left", "Right"))
+
+# ---- Build BART Checklists ----
+checklist_BART <- build_checklist_treated_control(out_pt_BART, ptprops_BART)
+checklist_treated_BART <- checklist_BART[[1]]
+checklist_control_BART <- checklist_BART[[2]]
+
+```
+
+```{r}
+#| label: predict-outcome-patient-CART
+
+# ---- Predict outcomes with CART ----
+out_pt_CART <- 
+  surglist %>% 
+  map(pred_pt_outcome_CART, xx=xpt, out_list_CART=out_list_CART) %>% 
+  bind_rows()
+
+```
+
+```{r}
+#| label: format-outcome-patient-CART
+
+# ---- Build CART Checklists ----
+checklist_CART <- build_checklist_treated_control(out_pt_CART, ptprops_CART)
+checklist_treated_CART <- checklist_CART[[1]]
+checklist_control_CART <- checklist_CART[[2]]
+
+```
+
+```{r}
+#| label: predict-outcome-patient-NB
+
+# ---- Predict outcomes with CART ----
+out_pt_NB <- 
+  surglist %>% 
+  map(pred_pt_outcome_NB, xx=xpt, out_list_NB=out_list_NB) %>% 
+  bind_rows()
+
+```
+
+```{r}
+#| label: format-outcome-patient-NB
+
+# ---- Build NB Checklists ----
+checklist_NB <- build_checklist_treated_control(out_pt_NB, ptprops_NB)
+checklist_treated_NB <- checklist_NB[[1]]
+checklist_control_NB <- checklist_NB[[2]]
+
+```
+
+### Predicted Outcome <u>**With Treatment**</u>
+
+::: {.panel-tabset .nav-pills}
+#### BART
+```{r}
+#| label: outcome-table-bart-treated
+checklist_treated_BART
+```
+#### CART
+```{r}
+#| label: outcome-table-cart-treated
+checklist_treated_CART
+```
+#### Naive Bayes
+```{r}
+#| label: outcome-table-nb-treated
+checklist_treated_NB
+```
+:::
+
+### Predicted Outcome <u>**Without Treatment**</u>
+
+::: {.panel-tabset .nav-pills}
+#### BART
+```{r}
+#| label: outcome-table-bart-control
+checklist_control_BART
+```
+#### CART
+```{r}
+#| label: outcome-table-cart-control
+checklist_control_CART
+```
+#### Naive Bayes
+```{r}
+#| label: outcome-table-nb-control
+checklist_control_NB
+```
+:::

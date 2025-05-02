@@ -4,6 +4,7 @@ library(quarto)
 
 # Define UI -----
 ui <- fluidPage(
+  
   # UI elements for parameter input
   textInput("MRN", "MRN", "606085"),
   textInput("Event_Date", "Event Date", "2018-06-21"),
@@ -19,12 +20,14 @@ ui <- fluidPage(
   actionButton("renderBtn", "Render EB GAIT Report")
 )
 
-# Define server -----
+# Define server ----
 server <- function(input, output, session) {
   
-  # Function to render Quarto document...
+  # Function to render Quarto document ----
   renderQuarto <- function() {
-    params <- list(
+    
+    # EBReport Template ----
+    EBReport_params <- list(
       MRN = input$MRN,
       Event_Date = input$Event_Date,
       deid = input$deid,
@@ -36,21 +39,35 @@ server <- function(input, output, session) {
       password = input$password
     )
     
-    # Template
-    quarto_file <- "EBReport.qmd"
-    output_file <- glue::glue("EBReport_{params$MRN}_{params$Event_Date}.html")
+    EBReport_script <- "EBReport.qmd"
+    EBReport_outfile <- 
+      glue::glue("EBReport_{EBReport_params$MRN}_{EBReport_params$Event_Date}.html")
     
-    # Render Quarto document with parameters...
     quarto::quarto_render(
-      quarto_file, 
-      execute_params = params, 
-      output_file = output_file)
+      EBReport_script, 
+      execute_params = EBReport_params, 
+      output_file = EBReport_outfile)
+    
+    # EBCompare Template ----
+    EBCompare_params <- list(
+      MRN = input$MRN,
+      Event_Date = input$Event_Date,
+      fit_prop = FALSE,
+      fit_out = FALSE
+    )
+    
+    EBCompare_script <- "EBCompare.qmd"
+    EBCompare_outfile <- 
+      glue::glue("EBCompare_{EBCompare_params$MRN}_{EBCompare_params$Event_Date}.html")
+    
+    quarto::quarto_render(
+      EBCompare_script,
+      execute_params = EBCompare_params,
+      output_file = EBCompare_outfile)
   }
   
   # Event handler for rendering Quarto document...
-  observeEvent(input$renderBtn, {
-    renderQuarto()
-  })
+  observeEvent(input$renderBtn, {renderQuarto()})
   
 }
 

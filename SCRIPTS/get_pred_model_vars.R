@@ -134,7 +134,10 @@ get_pred_model_vars <- function(v){
   if(v == "minsta_Kne_Ang_Sag") pred_vars <- 
       c("KNEE_EXT", "PATELLA_ALTA", "EXTEN_LAG",
         "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag")
-  
+ 
+  if(v == "midsta_Kne_Ang_Sag") pred_vars <- 
+      c("KNEE_EXT", "PATELLA_ALTA", "EXTEN_LAG",
+        "meansta_Kne_Ang_Sag", "midsta_Kne_Ang_Sag") 
   
   # Spasticity -----
   if(v == "avgspa") pred_vars <- 
