@@ -23,7 +23,19 @@ get_pred_model_vars <- function(v){
         "EOS_FemTor", "EOS_Bimal",
         "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", "meansta_Foo_Ang_Trn")
   
+  
+  if(v == "meansta_Pel_Ang_Trn") pred_vars <- 
+      c("HIP_INT_ROT", "HIP_EXT_ROT", "ANTEVERSION", "BIMAL",
+        "EOS_FemTor", "EOS_Bimal",
+        "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", "meansta_Foo_Ang_Trn")
+  
+  
   if(v == "meansta_Hip_Ang_Trn") pred_vars <- 
+      c("HIP_INT_ROT", "HIP_EXT_ROT", "ANTEVERSION", "BIMAL",
+        "EOS_FemTor", "EOS_Bimal",
+        "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", "meansta_Foo_Ang_Trn")
+  
+  if(v == "meansta_Kne_Ang_Trn") pred_vars <- 
       c("HIP_INT_ROT", "HIP_EXT_ROT", "ANTEVERSION", "BIMAL",
         "EOS_FemTor", "EOS_Bimal",
         "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", "meansta_Foo_Ang_Trn")
@@ -93,7 +105,7 @@ get_pred_model_vars <- function(v){
   if(v == "maxsta_Pel_Ang_Cor") pred_vars <- 
       c("HIP_ABD_0", 
         "ic_Pel_Ang_Cor", "maxsta_Pel_Ang_Cor", "minswi_Pel_Ang_Cor")
-
+  
   
   # Calf Muscle Contracture -----
   if(v == "ANK_DORS_0") pred_vars <- 
@@ -134,7 +146,7 @@ get_pred_model_vars <- function(v){
   if(v == "minsta_Kne_Ang_Sag") pred_vars <- 
       c("KNEE_EXT", "PATELLA_ALTA", "EXTEN_LAG",
         "meansta_Kne_Ang_Sag", "minsta_Kne_Ang_Sag")
- 
+  
   if(v == "midsta_Kne_Ang_Sag") pred_vars <- 
       c("KNEE_EXT", "PATELLA_ALTA", "EXTEN_LAG",
         "meansta_Kne_Ang_Sag", "midsta_Kne_Ang_Sag") 
@@ -207,29 +219,30 @@ get_pred_model_vars <- function(v){
   vgoals <- c("TOTAL_Score", "Activities_Sports_Rec", "ADL_Indep", "Braces_Mobility",
               "Gait_Func_Mobility", "Gait_Pattern_Appearance", "Image_Esteem", 
               "Pain_Discomfort_Fatigue")
-
+  
   if(v %in% vgoals) pred_vars <- 
-      c(vgoals, 
+      c(
+        vgoals, 
         
-        "GDI", "FAQT", "DMC", "avgspa", "avgstr", "avgsel", 
+        "GDI", "FAQT", "DMC", 
+        "NDspeed", "NDcadence",
+        "avgspa", "avgstr", "avgsel", 
         "avgwb", "avgnwb",
-        "HIP_INT_ROT", "HIP_EXT_ROT", "ANTEVERSION", "EOS_FemTor", "BIMAL", "EOS_Bimal",
+        "HIP_INT_ROT", "FemTor", "BIMAL", "EOS_Bimal",
         "HIP_EXT", "POP_ANG_UNI",
         "KNEE_EXT", "EXTEN_LAG", "PATELLA_ALTA",
         "ANK_DORS_0", "ANK_DORS_90",
         
-        "ic_Pel_Ang_Sag", "midsta_Pel_Ang_Sag", "ofc_Pel_Ang_Sag", "fo_Pel_Ang_Sag", "midswi_Pel_Ang_Sag",
-        "ic_Hip_Ang_Sag", "midsta_Hip_Ang_Sag", "ofc_Hip_Ang_Sag", "fo_Hip_Ang_Sag", "midswi_Hip_Ang_Sag",
-        "ic_Kne_Ang_Sag", "midsta_Kne_Ang_Sag", "ofc_Kne_Ang_Sag", "fo_Kne_Ang_Sag", "midswi_Kne_Ang_Sag",
-        "ic_Ank_Ang_Sag", "midsta_Ank_Ang_Sag", "ofc_Ank_Ang_Sag", "fo_Ank_Ang_Sag", "midswi_Ank_Ang_Sag",
+        "rom_Pel_Ang_Sag",
+        "midsta_Hip_Ang_Sag", "midsta_Kne_Ang_Sag", "midsta_Ank_Ang_Sag",
         
-        "ic_Pel_Ang_Cor", "midsta_Pel_Ang_Cor", "ofc_Pel_Ang_Cor", "fo_Pel_Ang_Cor", "midswi_Pel_Ang_Cor",
-        "ic_Hip_Ang_Cor", "midsta_Hip_Ang_Cor", "ofc_Hip_Ang_Cor", "fo_Hip_Ang_Cor", "midswi_Hip_Ang_Cor",
-        
-        "ic_Pel_Ang_Trn", "midsta_Pel_Ang_Trn", "ofc_Pel_Ang_Trn", "fo_Pel_Ang_Trn", "midswi_Pel_Ang_Trn",
-        "ic_Hip_Ang_Trn", "midsta_Hip_Ang_Trn", "ofc_Hip_Ang_Trn", "fo_Hip_Ang_Trn", "midswi_Hip_Ang_Trn",
-        "ic_Foo_Ang_Trn", "midsta_Foo_Ang_Trn", "ofc_Foo_Ang_Trn", "fo_Foo_Ang_Trn", "midswi_Foo_Ang_Trn"
+        "meansta_Pel_Ang_Trn", "meansta_Hip_Ang_Trn", "meansta_Kne_Ang_Trn", 
+        "meansta_Foo_Ang_Trn"
       )
+  
+  # Add age, GMFCS, prior_surgery, interval_surgery, ----
+  pred_vars <- c(pred_vars, "age", "GMFCS", 
+                 glue("interval_{surglist}"), glue("prior_{surglist}"))
   
   return(pred_vars)
 }

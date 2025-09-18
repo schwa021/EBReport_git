@@ -5,7 +5,6 @@ read_and_organize <- function(dd) {
   ####################################################
   # If this is pre-post data, use the following code #
   ####################################################
-  
   if (pp) {
     ddret <-
       dd %>%
@@ -83,7 +82,6 @@ read_and_organize <- function(dd) {
       as_tibble()
   }
   
-  
   ###################################################
   # If this is pre-only data use the following code #
   ###################################################
@@ -115,7 +113,14 @@ read_and_organize <- function(dd) {
         )
       ) %>%
       ## Choose EOS or PE for Anteversion and Tibial Torsion
-      mutate(FemTor = ifelse(!is.na(EOS_FemTor), EOS_FemTor, ANTEVERSION)) %>% 
+      mutate(
+        FemTor = if ("EOS_FemTor" %in% names(.) ) {
+          ifelse(!is.na(.$EOS_FemTor), .$EOS_FemTor, ANTEVERSION)
+        } else {
+          ANTEVERSION
+        }
+      ) %>% 
+      # mutate(FemTor = ifelse(!is.na(EOS_FemTor), EOS_FemTor, ANTEVERSION)) %>% 
       # Define year
       mutate(Year = year(Event_Date)) %>%
       ## Recode FDO_DFEO --> FDO and DFEO

@@ -2,8 +2,8 @@
 
 read_c3d_one <- function(mrn_in, tt){
   # Load Libraries -----
-  library(tidyverse)
-  library(glue)
+  # library(tidyverse)
+  # library(glue)
   library(DBI)
   
   # Load functions -----
@@ -80,13 +80,19 @@ read_c3d_one <- function(mrn_in, tt){
   
   # Loop over  files in list -----
   for (kk in 1:max(ixupdate)) {
-
+    
     # Read in c3d file -----
     # If there are no kinematics then skip file
     if(!TrialInfo$Performed_Kinematics[kk]) next
     
     # If it's a C3D file -----
     if(str_detect(TrialInfo$Filename[kk], "c3d|C3d|C3D")){ 
+      # Check for "x" folder (second visit in one month issue)
+      if(!file.exists(TrialInfo$Filename[kk])){
+        pattern <- "(PTNT|PTN2)\\\\(PDB|QDB)\\\\(\\d{6})"
+        replacement <- "\\1\\\\\\2\\\\\\3x"
+        TrialInfo$Filename[kk] <- sub(pattern, replacement, TrialInfo$Filename[kk])      
+      }
       
       # Read in C3D file using Bruce MacWilliams' ReadC3D function
       # Temp fix after IS fucked us over with path name change (str_replace)
@@ -106,7 +112,7 @@ read_c3d_one <- function(mrn_in, tt){
       Len[[kk]] <- extract_data(c, typestr = "Length")
       Vel[[kk]] <- extract_data(c, typestr = "Velocity")
       
-       if(TrialInfo$Performed_Kinetics[kk] == 1){
+      if(TrialInfo$Performed_Kinetics[kk] == 1){
         Mom[[kk]] <- extract_data(c, typestr = "Moment")
         Pwr[[kk]] <- extract_data(c, typestr = "Power")
         Rxn[[kk]] <- extract_data(c, typestr = "Reaction")
@@ -141,10 +147,10 @@ read_c3d_one <- function(mrn_in, tt){
       Trk[[kk]] <- tibble()
       Len[[kk]] <- tibble()
       Vel[[kk]] <- tibble()
-  }
+    }
     # Update time extracted -----
     TrialInfo$t_extracted[kk] <- now()
-}   # End of file reading loop
+  }   # End of file reading loop
   
   # Name the list elements by patientid, examid, and trial -----
   names(Ang) <- glue("MRN.{mrn_in}.Exam_ID.{TrialInfo$Exam_ID}.Trial.{TrialInfo$Trial_Num}")
@@ -187,8 +193,8 @@ read_c3d_one <- function(mrn_in, tt){
   lendat <- map(.x = samp, ~ stretchwrap(Len_avg[[.x]], d = 0)) %>% list_cbind()
   veldat <- map(.x = samp, ~ stretchwrap(Vel_avg[[.x]], d = 0)) %>% list_cbind()
   trkdat <- map(.x = samp, ~ stretchwrap(Trk_avg[[.x]], d = 0)) %>% list_cbind()
-
-
+  
+  
   # Compute statistics -----
   Ang_stats <- allstats(angdat)
   Mom_stats <- allstats(momdat)
@@ -197,7 +203,7 @@ read_c3d_one <- function(mrn_in, tt){
   Trk_stats <- allstats(trkdat)
   Len_stats <- allstats(lendat)
   Vel_stats <- allstats(veldat)
-
+  
   # Function to automatically name list elements -----
   listN <- function(...){
     anonList <- list(...)
@@ -212,4 +218,4 @@ read_c3d_one <- function(mrn_in, tt){
   )
   
   return(retlist)
-  }
+}

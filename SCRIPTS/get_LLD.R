@@ -1,6 +1,11 @@
 # Compute LLD (L - R)
 get_LLD <- function(x, v, vd){
   
+  # Check for EOS_LegLength
+  if(!"EOS_LegLength" %in% names(x)){
+    x$EOS_LegLength <- NA
+  }
+  
   vf <- function(q){
     y <- mean(q, na.rm = T)
     return(y)

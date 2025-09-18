@@ -27,8 +27,8 @@ execute:
   error: false
   
 params:
-  MRN: 616480
-  Event_Date: "2025-04-25"
+  MRN: 690855
+  Event_Date: "2025-05-27"
   fit_prop: false
   fit_out: false
   
@@ -68,7 +68,7 @@ source("SCRIPTS/get_outcome_thresh.R")
 
 # ---- User written functions for comparing Naive Bayes to BART ----
 # source("SCRIPTS/functions_for_comparing_models.R")
-list.files("SCRIPTS/COMPARE", pattern = "\\.R$", full.names = TRUE) %>% 
+scripts <- list.files("SCRIPTS/COMPARE", pattern = "\\.R$", full.names = TRUE) %>% 
   purrr::walk(source)
 
 # ---- List of surgeries ----
@@ -99,6 +99,14 @@ dat <- dat %>% mutate(rowid = row_number())
 datpre <- readRDS("DATA/FD_2024-05-25.RDS")
 datpre <- datpre %>% mutate(rowid = row_number())
 
+# ---- Load previously fit propensity and outcome models ----
+temp <- readRDS("OUTPUT/Comparison_Models/out_list_2025-05-09.RDS")
+list2env(temp, envir = .GlobalEnv)
+temp <- readRDS("OUTPUT/Comparison_Models/prop_list_2025-05-09.RDS")
+list2env(temp, envir = .GlobalEnv)
+```
+
+```{r}
 # ---- Load patient ----
 ptdatfile <- glue("EBData_{params$MRN}_{params$Event_Date}.RDS")
 
@@ -115,11 +123,11 @@ xpt <-
   ptdat$xpt %>% 
   mutate(across(where(is.factor), ~ factor(., levels = levels(dat[[cur_column()]]))))
 
-# ---- Load previously fit propensity and outcome models ----
-temp <- readRDS("OUTPUT/Comparison_Models/out_list_2024-05-25.RDS")
-list2env(temp, envir = .GlobalEnv)
-temp <- readRDS("OUTPUT/Comparison_Models/prop_list_2024-05-25.RDS")
-list2env(temp, envir = .GlobalEnv)
+# Find variables that are numeric in dat and convert NA values of these in xpt to NA_real_
+vnum <- names(dat)[sapply(dat, is.numeric)]
+vnum <- vnum[vnum %in% names(xpt)]
+xpt <- xpt %>%
+  mutate(across(vnum, ~ ifelse(is.na(.), NA_real_, .)))
 
 ```
 
@@ -162,7 +170,7 @@ if(params$fit_prop){
       prop_list_CART = prop_list_CART,
       prop_list_NB = prop_list_NB
     )
-  saveRDS(savelist, "Output/Comparison_Models/prop_list_2024-05-25.RDS",
+  saveRDS(savelist, "OUTPUT/Comparison_Models/prop_list_2025-05-09.RDS",
           compress = FALSE)
 }
 
@@ -176,7 +184,7 @@ if(params$fit_prop){
 #| out-height: 75%
 #| out-width: 75%
 #| fig-align: center
-#| eval: false
+#| eval: true
 
 perf_list <-
   surglist %>%
@@ -203,21 +211,6 @@ prop_perf_plt
 ```
 
 ```{r}
-#| label: build-outcome-models-cart
-#| include: false
-
-# ---- Build categorical outcome models using CART ----
-if(params$fit_out){
-  voutlist <- surglist %>% map(get_outcome_vars) %>% unlist() %>% unique()
-  out_list_CART <-
-    voutlist %>%
-    map(model_outcome_CART, df=dat, outbart=outbart, .progress=TRUE) %>%
-    setNames(voutlist)
-}
-
-```
-
-```{r}
 #| label: build-outcome-models-naive-bayes
 #| include: false
 
@@ -229,7 +222,20 @@ if(params$fit_out){
     map(model_outcome_NB, df=dat, outbart=outbart, .progress=TRUE) %>%
     setNames(voutlist)
 }
+```
 
+```{r}
+#| label: build-outcome-models-cart
+#| include: false
+
+# ---- Build categorical outcome models using CART ----
+if(params$fit_out){
+  voutlist <- surglist %>% map(get_outcome_vars) %>% unlist() %>% unique()
+  out_list_CART <-
+    voutlist %>%
+    map(model_outcome_CART, df=dat, outbart=outbart, .progress=TRUE) %>%
+    setNames(voutlist)
+}
 ```
 
 ```{r}
@@ -244,7 +250,6 @@ if(params$fit_out){
     map(model_outcome_BART, outbart=outbart, df=dat, .progress=TRUE) %>%
     setNames(voutlist)
 }
-
 ```
 
 ```{r}
@@ -258,7 +263,7 @@ if(params$fit_out){
       out_list_CART = out_list_CART,
       out_list_NB = out_list_NB
     )
-  saveRDS(savelist, "Output/Comparison_Models/out_list_2024-05-25.RDS", 
+  saveRDS(savelist, "Output/Comparison_Models/out_list_2025-05-09.RDS", 
           compress = FALSE)
 }
 
@@ -270,7 +275,7 @@ if(params$fit_out){
 ```{r}
 #| label: build-outcome-comparison-plot
 #| fig-align: center
-#| eval: false
+#| eval: true
 
 # Build categorical outcome comparison plot ----
 voutlist <- surglist %>% map(get_outcome_vars) %>% unlist() %>% unique()

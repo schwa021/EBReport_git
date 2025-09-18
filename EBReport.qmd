@@ -3,7 +3,6 @@ title: "EB GAIT"
 subtitle: "Evidence Based Gait Analysis Interpretation Technique"
 Author: ""
 Date: ""
-
 format:
   html:
     dev: ragg_png
@@ -17,12 +16,11 @@ format:
     theme:
       - cosmo
     grid:
+      
       body-width: 1050px
       sidebar-width: 250px
       margin-width: 0px
-      
 lightbox: true
-
 knitr:
   opts_chunk:
     warning: false
@@ -39,9 +37,10 @@ execute:
   error: false
     
 params:
-  MRN: 668551
+  
+  MRN: 653509
   # MRN: 488909
-  Event_Date: "2025-05-01"
+  Event_Date: "2025-06-09"
   # Event_Date: "2023-07-19"
   deid: FALSE
   usevideo: FALSE
@@ -50,7 +49,6 @@ params:
   custom_outcome: FALSE
   username: "mschwartz@gillettechildrens.com"
   password: "Duffy001!))))))))"
-  
 editor_options: 
   chunk_output_type: console
 ---
@@ -113,13 +111,15 @@ devdat <- dd  %>%
 # Get clinical data from RRFMP output -----
 # Note that pre-processed data contains propensity scores...
 if(file.exists("DATA/preprocessed_data_current.RDS")){
-  dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
+  # dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
+  dat0 <- readRDS("DATA/FDpp_2025-05-09.RDS")
   dat <- readRDS("DATA/preprocessed_data_current.RDS")
   dat <- get_meanscores(dat, "Pre")
   dat <- get_meanscores(dat, "Post")
   dat <- get_O2_Z(dat)
 } else {
-  dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
+  # dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
+  dat0 <- readRDS("DATA/FDpp_2025-05-09.RDS")
   dat <- read_and_organize(dat0)
   dat <- get_meanscores(dat, "Pre")
   dat <- get_meanscores(dat, "Post")
@@ -127,7 +127,8 @@ if(file.exists("DATA/preprocessed_data_current.RDS")){
 }
 
 # Get all pre- data (used in GOAL table, etc...) -----
-datpre <- readRDS("DATA/FD_2024-05-25.RDS")
+# datpre <- readRDS("DATA/FD_2024-05-25.RDS")
+datpre <- readRDS("DATA/FD_2025-05-09.RDS")
 datpre <- read_and_organize(datpre)
 datpre <- get_meanscores(datpre, "Pre")
 datpre <- get_O2_Z(datpre)
@@ -176,7 +177,7 @@ for (s in surglist) {
 #| cache: false
 
 # Compute propensities -----
-if(is.null(dat$p_Femoral_Derotation_Osteotomy)){
+if(!("p_Femoral_Derotation_Osteotomy" %in% names(dat))){
   for (s in surglist) {
     cat("Computing Propensity for Surgery ", s, "\n")
     load(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))
@@ -275,7 +276,7 @@ xpt <- compute_FAQT(xpt)
 if(xpt$dx[1] %in% c("Myelomeningocele")){
   xpt$affected <- factor(TRUE, levels = c("FALSE", "TRUE"))
 }
-  
+
 if(!params$deid){
   ptname <- glue("{xpt$Child_First} {xpt$Child_Last}")[1]
   ptdate <- format(as.Date(params$Event_Date), "%b %d, %Y")
@@ -434,7 +435,6 @@ if(!params$deid & !(all(vidlist %in% temp))){
 }
 ```
 
-
 ```{r}
 #| label: generate-html-video-code
 #| cache: false
@@ -569,19 +569,31 @@ vnew <- NULL
 
 # Fit and Save Models -----
 if(length(vnew) > 0) {
+  # Outcome models WITH gait data
   temp <- 
     vnew %>% 
-    map(\(v) build_pred_outcome_BART(dat, v, usegait=TRUE), .progress=TRUE)
-  names(temp) <- vnew
-  bartlist <- c(bartlist, temp)
+    map(\(v) build_pred_outcome_BART(dat, v, usegait=TRUE), .progress=TRUE) %>% 
+    setNames(vnew)
+
+  if(exists("bartlist")){
+    bartlist <-c(bartlist, temp)
+  } else {
+    bartlist <- temp
+  }
   saveRDS(bartlist, "DATA/outcome_models_bartlist.RDS")
   
-  temp <- 
+  # Outcome models WITHOUT gait data
+  temp_nogait <- 
     vnew %>% 
-    map(\(v) build_pred_outcome_BART(dat, v, usegait=FALSE), .progress=TRUE)
-  names(temp) <- vnew
-  bartlist_nogait <- c(bartlist_nogait, temp)
-  saveRDS(bartlist, "DATA/outcome_models_bartlist_nogait.RDS")
+    map(\(v) build_pred_outcome_BART(dat, v, usegait=FALSE), .progress=TRUE) %>% 
+    setNames(vnew)
+  
+  if(exists("bartlist_nogait")){
+    bartlist_nogait <-c(bartlist_nogait, temp_nogait)
+  } else {
+    bartlist_nogait <- temp_nogait
+  }
+  saveRDS(bartlist_nogait, "DATA/outcome_models_bartlist_nogait.RDS")
 }
 ```
 
@@ -627,7 +639,7 @@ out_all <- remove_missing_outcome(out_all)
 #| label: save-patient-data
 
 datsave <- list(xpt = xpt, propL = propL, propR = propR, proptbl = proptbl, 
-       shap_all = shap_all, shap_tables = shap_tables, out_all = out_all)
+                shap_all = shap_all, shap_tables = shap_tables, out_all = out_all)
 saveRDS(datsave, glue("EBData_{params$MRN}_{params$Event_Date}.RDS"))
 ```
 
@@ -649,7 +661,7 @@ for (s in surglist) {
   # Option to customize outcome vars (now use DATA/Outcome_Setup_Custom.xlsx) -----
   # if(s == "Femoral_Derotation_Osteotomy") v <-
   # c("HIP_EXT_ROT", "meansta_Hip_Ang_Trn", "meansta_Pel_Ang_Sag", "meansta_Foo_Ang_Trn")
-
+  
   # Get propensity for setting title color -----
   pvalL <- 
     propL |> 

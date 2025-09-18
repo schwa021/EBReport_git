@@ -4,14 +4,14 @@
 
 build_propensity_mod <- function(s, df, fp2fn=1, usegait=TRUE){
   
-  # This function gets the diagnostic metrics at a given probability threshold -----
-  # getres <- function(metrics, prob){
-  #   res <-
-  #     metrics |>
-  #     filter(thresh == prob) |>
-  #     mutate(across(everything(),~ round(.,2)))
-  #   return(res)
-  # }
+  # Get the diagnostic metrics at a given probability threshold (not curr. used) -----
+  getres <- function(metrics, prob){
+    res <-
+      metrics |>
+      filter(thresh == prob) |>
+      mutate(across(everything(),~ round(.,2)))
+    return(res)
+  }
   
   # This function calculates several diagnostic metrics for a given threshold -----
   calculate_metrics <- function(threshold, data, cost) {

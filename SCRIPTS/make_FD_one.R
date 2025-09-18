@@ -23,7 +23,8 @@ make_FD_one <- function(datc3d, mrn_in){
   source("SCRIPTS/add_EOS.R")
   # con2 <- odbcConnect("Azure_Connection", uid = "mschwartz@gillettechildrens.com", pwd = "Duffy001!))))))))")
   con2 <- odbcConnect("Azure_Connection", uid = params$username, pwd = params$password)
-  FD <- add_EOS(FD, con2)
+  # Check for working con2 - this avoids crashing if EOS database is down
+  if(con2 != -1)  FD <- add_EOS(FD, con2)
   
   # Historical -----
   source("SCRIPTS/add_Historical.R")

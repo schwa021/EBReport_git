@@ -10,6 +10,7 @@ FIGURES/
 ARCHIVE/
 WIP/
 OUTPUT/appdata*
+Presentations/
 
 *.RDS
 EB*.RDS
@@ -35,3 +36,5 @@ temp*
 appdata*
 
 
+
+/.quarto/

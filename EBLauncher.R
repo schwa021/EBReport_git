@@ -12,6 +12,7 @@ ui <- fluidPage(
   passwordInput("password", "Password", "Duffy001!))))))))"),
   checkboxInput("deid", "Deidentify?", value = FALSE),
   checkboxInput("usevideo", "Include Video?", value = TRUE),
+  checkboxInput("compare", "Compare Models?", value = TRUE),
   checkboxInput("figsave", "Save Figures?", value = FALSE),
   checkboxInput("usegait", "Use Gait Data?", value = TRUE),
   checkboxInput("custom_outcome", "Use Custom Outcome?", value = FALSE),
@@ -60,10 +61,12 @@ server <- function(input, output, session) {
     EBCompare_outfile <- 
       glue::glue("EBCompare_{EBCompare_params$MRN}_{EBCompare_params$Event_Date}.html")
     
-    quarto::quarto_render(
-      EBCompare_script,
-      execute_params = EBCompare_params,
-      output_file = EBCompare_outfile)
+    if(input$compare) {
+      quarto::quarto_render(
+        EBCompare_script,
+        execute_params = EBCompare_params,
+        output_file = EBCompare_outfile)
+    }
   }
   
   # Event handler for rendering Quarto document...

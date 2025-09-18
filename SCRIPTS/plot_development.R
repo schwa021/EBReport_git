@@ -27,6 +27,12 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
     fd$FD <- temp
   }
   
+  # Add EOS_FemTor and EOS_Bimal = NA if not in data -----
+  if (any(v %in% c("EOS_FemTor", "EOS_Bimal")) & !"EOS_FemTor" %in% names(fd$FD)) {
+    fd$FD$EOS_FemTor <- NA
+    fd$FD$EOS_Bimal <- NA
+  }
+  
   # Build plot data -----
   pdat <-
     fd$FD |>
