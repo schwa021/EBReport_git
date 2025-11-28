@@ -270,10 +270,6 @@ ReadC3D <- function(
   # C3DFileName <- 'Sample C3Ds/999977 18.c3d'
   # C3DFileName <- 'Sample C3Ds/PyOut16_13.c3d'
   # C3DFileName <- 'Sample C3Ds/Bad_Analog_Units.c3d'
-  
-  
-  # C3DFileName <- 'Sample C3Ds/511760 104.c3d'
-  
   # # 
   # FirstReturnFrame <- 0
   # LastReturnFrame <- 0
@@ -303,7 +299,6 @@ ReadC3D <- function(
     ReadC3DExit(wstr, C3D)
     return(C3D)
   }
-  
   
   #### ---- Read Header ----
   # Read the C3D header information
@@ -520,10 +515,6 @@ ReadC3D <- function(
     # in which case both HeaderC3DFrames and PointFrames = -1
     NumberOfC3DFrames <- HeaderC3DFrames
   }
-  # 2/27/2025 Update LastC3DFrame when LastC3DFrame = 65535
-  if ((LastC3DFrameNumber - FirstC3DFrameNumber + 1) < NumberOfC3DFrames) {
-    LastC3DFrameNumber <- NumberOfC3DFrames + FirstC3DFrameNumber - 1
-  }
 
   # If HeaderC3DFrames == -1 this indicates overflow of number of frames for 
   # integer storage. This will also be reflected by the header variable 
@@ -542,7 +533,7 @@ ReadC3D <- function(
   # integers in a vector c(low_int, high_int), need to combine to long integer.
   # According to Edi Cramp, this is a Vicon issue, these are not written correctly 
   # as scalar so need to convert. BUT, as these are read in the header, there is no 
-  # reason to read these again from the parameter section unless the frames 
+  # reason to read these again from teh parameter section unless the frames 
   # exceed integer storage 2^16 in which case the header will return 
   # LastC3DFrameNumber = 65535. 
   # In theory the integer representing the higher bytes could also be negative,
@@ -568,16 +559,9 @@ ReadC3D <- function(
     }
     # Next check for LONG_FRAMES option which stores the number of frames, not start/end
     # Account for possible NA return
-    # 2/27/2025 fix to account for two integer POINT:LONG_FRAMES 
     lf <-  GetParameterData(Parameters, "POINT", "LONG_FRAMES", Warn = FALSE)
-    if (any(!is.na(lf))) {
-      # Can be stored in two ints
-      if(length(lf) == 2) {
-        NumberOfC3DFrames <- lf[1] + 65536 * lf[2]
-      }
-      if(lf[1] > NumberOfC3DFrames) {
-        NumberOfC3DFrames <- lf[1]
-      }
+    if (!is.na(lf)) {
+      NumberOfC3DFrames <- lf
     } 
   }
   
@@ -701,36 +685,11 @@ ReadC3D <- function(
   # Get analog names and parameters needed to offset and scale stored values
   # Get these only if there is analog data
   if (AnalogData) {
-    # Analog format: SIGNED or UNSIGNED
-    Analog_Format <- GetParameterData(Parameters, 'ANALOG', 'FORMAT', Warn = FALSE)
-    # If no ANALOG:FORMAT parameter assume SIGNED
-    if (is.na(Analog_Format[1])) {
-      Analog_Format <- 'SIGNED'
-    }
     # Offset values
     Analog_Offset <- GetParameterData(Parameters, 'ANALOG', 'OFFSET')
     # MAC Systems apparently label this as "OFFSETS"
     if (is.na(Analog_Offset[1])) {
       Analog_Offset <- GetParameterData(Parameters, 'ANALOG', 'OFFSETS')
-    }
-    # Change 2/24/2025
-    # Fix SIGNED storage, fix OFFSETS to be UNSIGNED values 
-    # This presumes that ANALOG:FORMAT actually applies to ANALOG:OFFSET
-    # May need to further account for the actual analog data type storage
-    # Check both ANALOG:FORMAT and check if there are any negative offsets
-    # Offsets should always be positive values
-    if (Analog_Format == 'UNSIGNED' | any(Analog_Offset < 0)) {
-      # Get Bits
-      AB <- GetParameterData(Parameters, 'ANALOG', 'BITS', Warn = FALSE)
-      # If no BIT parameter then assume 16 as this is default standard
-      if (is.na(AB[1])) {AB <- 16}
-      Analog_Offset <- case_when(
-        AB == 8 ~  bitwAnd(Analog_Offset, 0xFF),               # 0xFF = 2^8 -1 = 255
-        AB == 16 ~ bitwAnd(Analog_Offset, 0xFFFF),             # 0xFFFF =  2^16 -1  = 65535
-        AB == 32 ~ bitwAnd(Analog_Offset, 0xFFFFFFFF),         # 0xFFFFFFFF =  2^32-1 = 4294967295
-        AB == 64 ~ bitwAnd(Analog_Offset, 0xFFFFFFFFFFFFFFFF), # 0xFFFFFFFFFFFFFFFF =  2^64-1 = 18446744073709551615
-        TRUE ~ Analog_Offset
-      )
     }
     # Trim to number of analog channels, these can sometimes have move entries than channels
     Analog_Offset <- Analog_Offset[1:NumberOfAnalogChannels]
@@ -742,7 +701,7 @@ ReadC3D <- function(
     Analog_General_Scale <- GetParameterData(Parameters, 'ANALOG', 'GEN_SCALE')
     # Units
     Analog_Units <- GetParameterData(Parameters, 'ANALOG', 'UNITS')
-    # Trim to number of analog channels, these can sometimes have more entries than channels
+    # Trim to number of analog channels, these can sometimes have move entries than channels
     Analog_Units <- Analog_Units[1:NumberOfAnalogChannels]
     # Want our units to be standardized to Volts and Nmm, if Nm scale by 1000 by channel scale
     Analog_Scale_Multiplier <- 
@@ -842,8 +801,6 @@ ReadC3D <- function(
     MarkerData <- matrix(MarkerData, nrow = (4*NumberOfC3DFrames), ncol = NumberOfMarkers)
     # Make MarkerData matrix into a data frame with ID columns for XYZR coordinates and video frame numbers
     Coord <- c(rep('X', NumberOfC3DFrames), rep('Y', NumberOfC3DFrames), rep('Z', NumberOfC3DFrames), rep('R', NumberOfC3DFrames))
-    #Frame <- rep(FirstC3DFrameNumber:LastC3DFrameNumber, 4)
-    # Account for case where LastC3DFrameNumber > 65535
     Frame <- rep(FirstC3DFrameNumber:LastC3DFrameNumber, 4)
     # Additionally apply marker names to columns, remove all residual rows, and filter to optionally requested frame range
     MarkerData <- 
@@ -917,226 +874,226 @@ ReadC3D <- function(
       warning("ReadC3D:Force Plate Data: No Forceplates Used \n") 
       GetForcePlateData <- FALSE
     } else {
-      # Initialize variable for force plate name storage
-      FPName <- character(FP_Used)
-      # Determine what format the force plate output was written to c3d file. Valid types are 1-4.
-      FP_Type <- GetParameterData(Parameters, "FORCE_PLATFORM", "TYPE")
-      # Read in the location of the origins of the force plates (these are offsets from FP centers, not lab origins)
-      FP_Origin <- matrix(GetParameterData(Parameters,  "FORCE_PLATFORM", "ORIGIN"), nrow = 3, ncol = FP_Used)
-      # Because the AMTI force plate manual has the wrong sense of the origin
-      # vector, must verify that the Z value is negative. If not, negate the vector
-      FP_Origin[3,] <- -abs(FP_Origin[3,])
-      # Read in the frame numbers associated with determining "zero" values (start zero, end zero)
-      FP_Zero <- GetParameterData(Parameters, "FORCE_PLATFORM", "ZERO")
-      # Determine which analog channels correspond to the force plate output
-      # Returns channels in rows for each column of force plates
-      # For mixed force plate types channel rows not used are 0, need to remove
-      FP_Channel <- GetParameterData(Parameters, "FORCE_PLATFORM", "CHANNEL")
+        # Initialize variable for force plate name storage
+        FPName <- character(FP_Used)
+        # Determine what format the force plate output was written to c3d file. Valid types are 1-4.
+        FP_Type <- GetParameterData(Parameters, "FORCE_PLATFORM", "TYPE")
+        # Read in the location of the origins of the force plates (these are offsets from FP centers, not lab origins)
+        FP_Origin <- matrix(GetParameterData(Parameters,  "FORCE_PLATFORM", "ORIGIN"), nrow = 3, ncol = FP_Used)
+        # Because the AMTI force plate manual has the wrong sense of the origin
+        # vector, must verify that the Z value is negative. If not, negate the vector
+        FP_Origin[3,] <- -abs(FP_Origin[3,])
+        # Read in the frame numbers associated with determining "zero" values (start zero, end zero)
+        FP_Zero <- GetParameterData(Parameters, "FORCE_PLATFORM", "ZERO")
+        # Determine which analog channels correspond to the force plate output
+        # Returns channels in rows for each column of force plates
+        # For mixed force plate types channel rows not used are 0, need to remove
+        FP_Channel <- GetParameterData(Parameters, "FORCE_PLATFORM", "CHANNEL")
+        
+        # Determine if Offset Range is wanted and if so valid, set Offset = TRUE or FALSE
+        # Don't report back anything if ForcePlateZero is TRUE but range is invalid, as
+        # this just means defaulting to what was written in the C3D file. Could include an option
+        # to override this in case where C3D parameters indicate not to zero but user wants to zero
+        # anyway. Offset is TRUE if all the following conditions are met:
+        Offset <- ((FP_Zero[1] <= FP_Zero[2]) & 
+                   (FP_Zero[1] > 0) & 
+                   (FP_Zero[2] > 0) & 
+                   (FP_Zero[2] <= NumberOfC3DFrames)) &
+                    ForcePlateZero 
+        
+        # Make output array for force plate data: N force plates, 
+        # analog frame rows x 6 columns (Fx, Fy, Fz, CoPx, CoPy, Tz)
+        for (FP in 1:FP_Used) {
+          # Repackage ADCData for each force plate using FP channels, remove 0 channels and offset by the 3 ID columns
+          channels <- FP_Channel[, FP]
+          channels <- channels[!channels == 0] + 3
+          FPData <- ADCData %>%
+            select(all_of(channels))
+   
+          # First calculate offsets for each channel if specified
+          # Do this on the raw data before transformations
+          # Fix zero frame if set to 0
+          if (FP_Zero[1] == 0) {FP_Zero[1] <- 1}
+          
+          # Check if user wants the baseline offset to be removed.
+          # FP_Zero array specifies starting and ending range of frames to zero values
+          # Here we are assuming that if user specifies frames 1-10 to zero, but first 
+          # frame of data in C3D is say 50, we will still use the first 10 frames: 50-60 
+          if (Offset) {
+            # If frame range is valid, remove "DC" noise. eg. Valid: FP_Zero = (1, 10)
+            # If frame range is invalid, leave the signal alone. eg. FP_Zero = (10, 1)
+            # (Vicon specifies this definition of Invalid frame ranges; C3d standard
+            # requires FP_Zero = (0, 0) to prevent baseline removal)
+            
+            # Find offsets and Z-range
+            # Compute range of ADCData to use as zero 
+            ADCZeroStart <- (FP_Zero[1] - 1) * AnalogToVideoRate + 1
+            ADCZeroEnd <- FP_Zero[2] * AnalogToVideoRate + 1
+            # Dataframe for just zero range
+            ZeroData <- FPData %>%
+              slice(ADCZeroStart:ADCZeroEnd) %>%
+              drop_na() 
+            ZeroMean <- ZeroData %>%
+              colMeans()
+            
+            # Remove any baseline offset from the force plate data
+            # Having determined the mean and range of the noise, remove it
+            # sweep() subtracts vector from each row of matrix, 
+            # MARGIN = 2 indicates column wise application or STATS vector using 
+            # the subtraction function '-'
+            FPData <- sweep(FPData, MARGIN = 2, STATS =  ZeroMean, FUN = '-')
+            
+          } # If Offset
       
-      # Determine if Offset Range is wanted and if so valid, set Offset = TRUE or FALSE
-      # Don't report back anything if ForcePlateZero is TRUE but range is invalid, as
-      # this just means defaulting to what was written in the C3D file. Could include an option
-      # to override this in case where C3D parameters indicate not to zero but user wants to zero
-      # anyway. Offset is TRUE if all the following conditions are met:
-      Offset <- ((FP_Zero[1] <= FP_Zero[2]) & 
-                 (FP_Zero[1] > 0) & 
-                 (FP_Zero[2] > 0) & 
-                 (FP_Zero[2] <= NumberOfC3DFrames)) &
-                  ForcePlateZero 
-      
-      # Make output array for force plate data: N force plates, 
-      # analog frame rows x 6 columns (Fx, Fy, Fz, CoPx, CoPy, Tz)
-      for (FP in 1:FP_Used) {
-        # Repackage ADCData for each force plate using FP channels, remove 0 channels and offset by the 3 ID columns
-        channels <- FP_Channel[, FP]
-        channels <- channels[!channels == 0] + 3
-        FPData <- ADCData %>%
-          select(all_of(channels))
- 
-        # First calculate offsets for each channel if specified
-        # Do this on the raw data before transformations
-        # Fix zero frame if set to 0
-        if (FP_Zero[1] == 0) {FP_Zero[1] <- 1}
-        
-        # Check if user wants the baseline offset to be removed.
-        # FP_Zero array specifies starting and ending range of frames to zero values
-        # Here we are assuming that if user specifies frames 1-10 to zero, but first 
-        # frame of data in C3D is say 50, we will still use the first 10 frames: 50-60 
-        if (Offset) {
-          # If frame range is valid, remove "DC" noise. eg. Valid: FP_Zero = (1, 10)
-          # If frame range is invalid, leave the signal alone. eg. FP_Zero = (10, 1)
-          # (Vicon specifies this definition of Invalid frame ranges; C3d standard
-          # requires FP_Zero = (0, 0) to prevent baseline removal)
-          
-          # Find offsets and Z-range
-          # Compute range of ADCData to use as zero 
-          ADCZeroStart <- (FP_Zero[1] - 1) * AnalogToVideoRate + 1
-          ADCZeroEnd <- FP_Zero[2] * AnalogToVideoRate + 1
-          # Dataframe for just zero range
-          ZeroData <- FPData %>%
-            slice(ADCZeroStart:ADCZeroEnd) %>%
-            drop_na() 
-          ZeroMean <- ZeroData %>%
-            colMeans()
-          
-          # Remove any baseline offset from the force plate data
-          # Having determined the mean and range of the noise, remove it
-          # sweep() subtracts vector from each row of matrix, 
-          # MARGIN = 2 indicates column wise application or STATS vector using 
-          # the subtraction function '-'
-          FPData <- sweep(FPData, MARGIN = 2, STATS =  ZeroMean, FUN = '-')
-          
-        } # If Offset
-    
-        # Type 1 Force Plates
-        if (FP_Type[FP] == 1) {
-          # Type 1 force plate output is Fx,Fy,Fz,COP_x,COP_y,Tz
-          # Transformations from transducer outputs have occurred prior to C3D storage so no 
-          # additional manipulations other than possibly flipping reaction signs and zeroing are needed
-
-          # Standardize names
-          names(FPData) <- c('Fx', 'Fy', 'Fz', 'CoPx', 'CoPy', 'Tz')
-          
-          # Force plate data is already transformed
-          FPDataT <- FPData
-          
-        # Type 2 Force Plates
-        } else if (FP_Type[FP] == 2) {
-          # FP output data in form(Fx,Fy,Fz,Mx,My,Mz)
-          # For a type 2 force plate, FP_Origin is the vector from the FP origin
-          # to the geometric center of the FP surface in the FP coordinate system
-          # Type 2 plates are made by AMTI, Bertec, ...
-          
-          # Standardize names
-          names(FPData) <- c('Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz')
-          # Add columns for standardized output
-          FPData <- FPData %>%
-            mutate(CoPx = -(My - FP_Origin[3, FP] * Fx)/Fz - FP_Origin[1, FP],
-                   CoPy =  (Mx + FP_Origin[3, FP] * Fy)/Fz - FP_Origin[2, FP],
-                   Tz = Mz + Fx*(CoPy + FP_Origin[2, FP]) - Fy*(CoPx + FP_Origin[1, FP])
-            )
-          
-          # Select columns of standardized output
-          FPDataT <- FPData %>%
-            select(Fx, Fy, Fz, CoPx, CoPy, Tz)
-
-        # Type 3 Force Plates
-        } else if (FP_Type[FP] == 3) {
-          # Kistler plate with 8 channels of output data
-          # Standardize columns names
-          names(FPData) <- c('Fx12', 'Fx34', 'Fy14', 'Fy23', 'Fz1', 'Fz2', 'Fz3', 'Fz4')
-          # Add columns of standardized outputs
-          FPData <- FPData %>%
-            mutate(Fx =  Fx12 + Fx34,
-                   Fy =  Fy14 + Fy23,
-                   Fz =  Fz1 + Fz2 + Fz3 + Fz4,
-                   Mx = FP_Origin[2, FP] * ( Fz1 + Fz2 - Fz3 - Fz4) + FP_Origin[3, FP] * Fy,
-                   My = FP_Origin[1, FP] * (-Fz1 + Fz2 + Fz3 - Fz4) - FP_Origin[3, FP] * Fx,
-                   Mz = FP_Origin[2, FP] * (Fx34 - Fx12) + FP_Origin[1, FP] * (Fy14 - Fy23),
-                   CoPx = -My/Fz,
-                   CoPy =  Mx/Fz,
-                   Tz =  Mz - Fy * CoPx +  Fx * CoPy
-                   )
-          
-          # Select columns of standardized output
-          FPDataT <- FPData %>%
-            select(Fx, Fy, Fz, CoPx, CoPy, Tz)
-          
-        # Type 4 Force Plates
-        } else if (FP_Type[FP] == 4) {
-          # Same as Type 2 force plate EXCEPT that parameter CAL_MATRIX is provided to
-          # convert from volts to form(Fx,Fy,Fz,Mx,My,Mz)
-                                              
-          # For a type 4 force plate, FP_Origin is the vector from the FP origin
-          # to the geometric center of the FP surface in the FP coordinate system
-                  
-          # The calibration matrix, CAL_MATRIX, is used to convert volts to
-          # force and moment units. (ANALOG_SCALE parameter should only have taken
-          # the output signals to volts.)
-          # Stash this GetParameterData in this FP loop even though redundant 
-          # parameter reads will happen if more than one FP with type 4, FP Type 4s will be rare
-          FP_CM <- GetParameterData(Parameters, "FORCE_PLATFORM", "CAL_MATRIX")
-          # Dimensions of FP_CalMatrix are (6,6,FP_Used)
-          
-          # Convert to matrix and multiply by calibration transpose (sensitivity matrix)
-          FPmat <- (as.matrix(FPData) %*% t(FP_CM[,,FP]))
-
-          Fx <- FPmat[,1]
-          Fy <- FPmat[,2]
-          Fz <- FPmat[,3]
-          Mx <- FPmat[,4]
-          My <- FPmat[,5]
-          Mz <- FPmat[,6]
-          
-          CoPx <- -(My - FP_Origin[3, FP] * Fx) / Fz - FP_Origin[1, FP]
-          CoPy <-  (Mx + FP_Origin[3, FP] * Fy) / Fz - FP_Origin[2, FP]
-          Tz <- Mz + Fx * (CoPy + FP_Origin[2, FP]) - Fy * (CoPx + FP_Origin[1, FP])
-    
-          # Load current forces, center of pressure, and free torque into FPDataT array
-          FPDataT <- tibble(Fx = Fx, Fy = Fy, Fz = Fz, 
-                            CoPx = CoPx, CoPy = CoPy, Tz = Tz)
-          
-        } # If FP_Type[FP]
-        
-        # Regardless of DC offset requested, zero all data below calculated Fz threshold
-        # Calculate the range of the vertical force signal--"peak-to-peak signal"
-        FzSignalRange <- abs(max(FPDataT$Fz) - min(FPDataT$Fz))
-        # Zero any data less than 0.5% of range
-        # In case force plate has no loading and therefore no real signal range, 
-        # set an artificial threshold of 1N
-        FzCutOff = max(0.005 * FzSignalRange, 1)
-        
-        # Calculate mean vertical force to adjust force directions if flipped (Reaction Force if mean(Fz) < 0)
-        # Check if the scaled FP output is a reaction force or an action force, set ReactionFactor accordingly
-        ReactionFactor <- -sign(mean(FPDataT$Fz))
-        
-        # Augment FP data to include analog frames, video frames, and sub-frames
-        # These were already made in ADCData so just copy
-        # Also filter to First and Last Returned frames, flip components if reaction force was wrong sensed, and
-        # apply zero threshold offsets
-        FPDataT <- FPDataT %>%
-          add_column(AnalogFrames = ADCData$AnalogFrames, 
-                     VideoFrames = ADCData$VideoFrames, 
-                     SubFrames = ADCData$SubFrames) %>%
-          relocate(AnalogFrames, VideoFrames, SubFrames) %>%
-          dplyr::filter(between(VideoFrames, FirstReturnFrame, LastReturnFrame)) %>% 
-          mutate(
-            Fx = Fx * ReactionFactor,
-            Fy = Fy * ReactionFactor,
-            Fz = Fz * ReactionFactor,
-            Tz = Tz * ReactionFactor,
-            across(Fx:Tz, ~ case_when(abs(Fz) < FzCutOff ~ 0,
-                                      TRUE ~ .))
-            )
-        
-        # If shorter format requested then filter to just video frames and remove SubFrames column
-        if (ForcePlateDataFrames == 'video') {
-          FPDataT <- FPDataT %>%
-            dplyr::filter(SubFrames == 1) %>%
-            select(-SubFrames)
-        }
-        
-        # Store each set of FP data in one list
-        if (FP == 1) {
-          # Seemingly no names for forceplates stored in C3D so ...
-          FPName[1] <- 'ForcePlate1'
-          ForcePlateData <- list(FPDataT)
-        } else {
-          FPName[FP] <- paste0('ForcePlate', FP)
-          ForcePlateData <- c(ForcePlateData, list(FPDataT))
-        }
-        
-      } # Next FP  
-        
-      # Name the forceplates in the list after all are compiled
-      names(ForcePlateData) <- FPName
-      
-      # Cleanup
-      rm(FPData, FPDataT)
-    
-    } # if FP_USED
+          # Type 1 Force Plates
+          if (FP_Type[FP] == 1) {
+            # Type 1 force plate output is Fx,Fy,Fz,COP_x,COP_y,Tz
+            # Transformations from transducer outputs have occurred prior to C3D storage so no 
+            # additional manipulations other than possibly flipping reaction signs and zeroing are needed
   
-  }  # if (GetForcePlateData & AnalogData) 
+            # Standardize names
+            names(FPData) <- c('Fx', 'Fy', 'Fz', 'CoPx', 'CoPy', 'Tz')
+            
+            # Force plate data is already transformed
+            FPDataT <- FPData
+            
+          # Type 2 Force Plates
+          } else if (FP_Type[FP] == 2) {
+            # FP output data in form(Fx,Fy,Fz,Mx,My,Mz)
+            # For a type 2 force plate, FP_Origin is the vector from the FP origin
+            # to the geometric center of the FP surface in the FP coordinate system
+            # Type 2 plates are made by AMTI, Bertec, ...
+            
+            # Standardize names
+            names(FPData) <- c('Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz')
+            # Add columns for standardized output
+            FPData <- FPData %>%
+              mutate(CoPx = -(My - FP_Origin[3, FP] * Fx)/Fz - FP_Origin[1, FP],
+                     CoPy =  (Mx + FP_Origin[3, FP] * Fy)/Fz - FP_Origin[2, FP],
+                     Tz = Mz + Fx*(CoPy + FP_Origin[2, FP]) - Fy*(CoPx + FP_Origin[1, FP])
+              )
+            
+            # Select columns of standardized output
+            FPDataT <- FPData %>%
+              select(Fx, Fy, Fz, CoPx, CoPy, Tz)
+  
+          # Type 3 Force Plates
+          } else if (FP_Type[FP] == 3) {
+            # Kistler plate with 8 channels of output data
+            # Standardize columns names
+            names(FPData) <- c('Fx12', 'Fx34', 'Fy14', 'Fy23', 'Fz1', 'Fz2', 'Fz3', 'Fz4')
+            # Add columns of standardized outputs
+            FPData <- FPData %>%
+              mutate(Fx =  Fx12 + Fx34,
+                     Fy =  Fy14 + Fy23,
+                     Fz =  Fz1 + Fz2 + Fz3 + Fz4,
+                     Mx = FP_Origin[2, FP] * ( Fz1 + Fz2 - Fz3 - Fz4) + FP_Origin[3, FP] * Fy,
+                     My = FP_Origin[1, FP] * (-Fz1 + Fz2 + Fz3 - Fz4) - FP_Origin[3, FP] * Fx,
+                     Mz = FP_Origin[2, FP] * (Fx34 - Fx12) + FP_Origin[1, FP] * (Fy14 - Fy23),
+                     CoPx = -My/Fz,
+                     CoPy =  Mx/Fz,
+                     Tz =  Mz - Fy * CoPx +  Fx * CoPy
+                     )
+            
+            # Select columns of standardized output
+            FPDataT <- FPData %>%
+              select(Fx, Fy, Fz, CoPx, CoPy, Tz)
+            
+          # Type 4 Force Plates
+          } else if (FP_Type[FP] == 4) {
+            # Same as Type 2 force plate EXCEPT that parameter CAL_MATRIX is provided to
+            # convert from volts to form(Fx,Fy,Fz,Mx,My,Mz)
+                                                
+            # For a type 4 force plate, FP_Origin is the vector from the FP origin
+            # to the geometric center of the FP surface in the FP coordinate system
+                    
+            # The calibration matrix, CAL_MATRIX, is used to convert volts to
+            # force and moment units. (ANALOG_SCALE parameter should only have taken
+            # the output signals to volts.)
+            # Stash this GetParameterData in this FP loop even though redundant 
+            # parameter reads will happen if more than one FP with type 4, FP Type 4s will be rare
+            FP_CM <- GetParameterData(Parameters, "FORCE_PLATFORM", "CAL_MATRIX")
+            # Dimensions of FP_CalMatrix are (6,6,FP_Used)
+            
+            # Convert to matrix and multiply by calibration transpose (sensitivity matrix)
+            FPmat <- (as.matrix(FPData) %*% t(FP_CM[,,FP]))
+  
+            Fx <- FPmat[,1]
+            Fy <- FPmat[,2]
+            Fz <- FPmat[,3]
+            Mx <- FPmat[,4]
+            My <- FPmat[,5]
+            Mz <- FPmat[,6]
+            
+            CoPx <- -(My - FP_Origin[3, FP] * Fx) / Fz - FP_Origin[1, FP]
+            CoPy <-  (Mx + FP_Origin[3, FP] * Fy) / Fz - FP_Origin[2, FP]
+            Tz <- Mz + Fx * (CoPy + FP_Origin[2, FP]) - Fy * (CoPx + FP_Origin[1, FP])
+      
+            # Load current forces, center of pressure, and free torque into FPDataT array
+            FPDataT <- tibble(Fx = Fx, Fy = Fy, Fz = Fz, 
+                              CoPx = CoPx, CoPy = CoPy, Tz = Tz)
+            
+          } # If FP_Type[FP]
+          
+          # Regardless of DC offset requested, zero all data below calculated Fz threshold
+          # Calculate the range of the vertical force signal--"peak-to-peak signal"
+          FzSignalRange <- abs(max(FPDataT$Fz) - min(FPDataT$Fz))
+          # Zero any data less than 0.5% of range
+          # In case force plate has no loading and therefore no real signal range, 
+          # set an artificial threshold of 1N
+          FzCutOff = max(0.005 * FzSignalRange, 1)
+          
+          # Calculate mean vertical force to adjust force directions if flipped (Reaction Force if mean(Fz) < 0)
+          # Check if the scaled FP output is a reaction force or an action force, set ReactionFactor accordingly
+          ReactionFactor <- -sign(mean(FPDataT$Fz))
+          
+          # Augment FP data to include analog frames, video frames, and sub-frames
+          # These were already made in ADCData so just copy
+          # Also filter to First and Last Returned frames, flip components if reaction force was wrong sensed, and
+          # apply zero threshold offsets
+          FPDataT <- FPDataT %>%
+            add_column(AnalogFrames = ADCData$AnalogFrames, 
+                       VideoFrames = ADCData$VideoFrames, 
+                       SubFrames = ADCData$SubFrames) %>%
+            relocate(AnalogFrames, VideoFrames, SubFrames) %>%
+            dplyr::filter(between(VideoFrames, FirstReturnFrame, LastReturnFrame)) %>% 
+            mutate(
+              Fx = Fx * ReactionFactor,
+              Fy = Fy * ReactionFactor,
+              Fz = Fz * ReactionFactor,
+              Tz = Tz * ReactionFactor,
+              across(Fx:Tz, ~ case_when(abs(Fz) < FzCutOff ~ 0,
+                                        TRUE ~ .))
+              )
+          
+          # If shorter format requested then filter to just video frames and remove SubFrames column
+          if (ForcePlateDataFrames == 'video') {
+            FPDataT <- FPDataT %>%
+              dplyr::filter(SubFrames == 1) %>%
+              select(-SubFrames)
+          }
+          
+          # Store each set of FP data in one list
+          if (FP == 1) {
+            # Seemingly no names for forceplates stored in C3D so ...
+            FPName[1] <- 'ForcePlate1'
+            ForcePlateData <- list(FPDataT)
+          } else {
+            FPName[FP] <- paste0('ForcePlate', FP)
+            ForcePlateData <- c(ForcePlateData, list(FPDataT))
+          }
+          
+        } # Next FP  
+          
+        # Name the forceplates in the list after all are compiled
+        names(ForcePlateData) <- FPName
+        
+        # Cleanup
+        rm(FPData, FPDataT)
+      
+      } # if FP_USED
+    
+    }  # if (GetForcePlateData & AnalogData) 
 
   # Now can filter ADCData to requested frames
   if (AnalogData) {
@@ -1152,7 +1109,7 @@ ReadC3D <- function(
   if (GaitCycleEventsUsed == 0) {
     # warning('ReadC3D:Events: No events found in EVENT group \n')
     # Report EVENT group doesn't exist in returned variable
-    GaitCycleEvents <- 'No Gait Cycle Events from EVENT:USED'
+    GaitCycleEvents <- 'No Gait Cyle Events from EVENT:USED'
   } else {
     # Calculate Gait Cycle Events
     # GaitCycleEventsIconIDs <- GetParameterData(Parameters, "EVENT", "ICON_IDS")

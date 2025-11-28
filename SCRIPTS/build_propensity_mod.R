@@ -4,7 +4,7 @@
 
 build_propensity_mod <- function(s, df, fp2fn=1, usegait=TRUE){
   
-  # Get the diagnostic metrics at a given probability threshold (not curr. used) -----
+  # Get the diagnostic metrics at a given probability threshold (not used) -----
   getres <- function(metrics, prob){
     res <-
       metrics |>

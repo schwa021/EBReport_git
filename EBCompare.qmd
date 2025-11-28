@@ -3,7 +3,6 @@ title: "Comparing Three Machine Learning Models"
 sutitle: "BART vs. CART vs. Naive Bayes"
 Author: ""
 Date: ""
-
 format:
   html:
     toc: true
@@ -16,25 +15,25 @@ format:
     theme:
       - cosmo
     grid:
+      
       body-width: 1050px
       sidebar-width: 250px
       margin-width: 0px
-      
 execute:
+  
   echo: false
   warning: false
   message: false
   error: false
-  
 params:
-  MRN: 690855
-  Event_Date: "2025-05-27"
+  
+  MRN: 639640
+  Event_Date: "2025-10-27"
   fit_prop: false
   fit_out: false
-  
 editor_options: 
-  chunk_output_type: console
   
+  chunk_output_type: console
 ---
 
 ```{r}
@@ -65,6 +64,7 @@ source("SCRIPTS/fmt_shapLR.R")
 source("SCRIPTS/ptableLR.R")
 source("SCRIPTS/get_outcome_vars.R")
 source("SCRIPTS/get_outcome_thresh.R")
+source("SCRIPTS/Compare/remove_missing_outcome_pt.R")
 
 # ---- User written functions for comparing Naive Bayes to BART ----
 # source("SCRIPTS/functions_for_comparing_models.R")
@@ -127,7 +127,7 @@ xpt <-
 vnum <- names(dat)[sapply(dat, is.numeric)]
 vnum <- vnum[vnum %in% names(xpt)]
 xpt <- xpt %>%
-  mutate(across(vnum, ~ ifelse(is.na(.), NA_real_, .)))
+  mutate(across(all_of(vnum), ~ ifelse(is.na(.), NA_real_, .)))
 
 ```
 
@@ -185,6 +185,8 @@ if(params$fit_prop){
 #| out-width: 75%
 #| fig-align: center
 #| eval: true
+#| output: hide
+#| include: false
 
 perf_list <-
   surglist %>%
@@ -276,6 +278,8 @@ if(params$fit_out){
 #| label: build-outcome-comparison-plot
 #| fig-align: center
 #| eval: true
+#| output: hide
+#| include: false
 
 # Build categorical outcome comparison plot ----
 voutlist <- surglist %>% map(get_outcome_vars) %>% unlist() %>% unique()
@@ -323,7 +327,7 @@ ggsave("junk.png", width = 8, height = 10, dpi = 600, bg = "white")
 
 ```
 
-![](junk.png){width=672 height=864 fig-align="center"}
+<!-- ![](junk.png){width=672 height=864 fig-align="center"} -->
 
 ## Treatment Propensities for Patient
 
@@ -531,6 +535,9 @@ out_pt_BART <-
   map(pred_pt_outcome_BART, xx=xpt, out_list_BART=out_list_BART) %>% 
   bind_rows()
 
+# Remove outcomes where pre-data is missing ----
+out_pt_BART <- remove_missing_outcome_pt(out_list_BART, out_pt_BART, xpt)
+
 ```
 
 ```{r}
@@ -556,6 +563,9 @@ out_pt_CART <-
   map(pred_pt_outcome_CART, xx=xpt, out_list_CART=out_list_CART) %>% 
   bind_rows()
 
+# Remove outcomes where pre-data is missing ----
+out_pt_CART <- remove_missing_outcome_pt(out_list_CART, out_pt_CART, xpt)
+
 ```
 
 ```{r}
@@ -576,6 +586,9 @@ out_pt_NB <-
   surglist %>% 
   map(pred_pt_outcome_NB, xx=xpt, out_list_NB=out_list_NB) %>% 
   bind_rows()
+
+# Remove outcomes where pre-data is missing ----
+out_pt_NB <- remove_missing_outcome_pt(out_list_NB, out_pt_NB, xpt)
 
 ```
 

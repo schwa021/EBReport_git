@@ -22,7 +22,7 @@ remove_missing_outcome <- function(out_all){
       across(
         matches("pct|^tau"),
         ~ case_when(
-          side == "R" & var %in% outvars[missL] ~ NA,
+          side == "R" & var %in% outvars[missR] ~ NA,
           TRUE ~ .
         )
       )

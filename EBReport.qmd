@@ -38,10 +38,8 @@ execute:
     
 params:
   
-  MRN: 653509
-  # MRN: 488909
-  Event_Date: "2025-06-09"
-  # Event_Date: "2023-07-19"
+  MRN: 511760
+  Event_Date: "2025-10-27"
   deid: FALSE
   usevideo: FALSE
   usegait: TRUE
@@ -134,7 +132,6 @@ datpre <- get_meanscores(datpre, "Pre")
 datpre <- get_O2_Z(datpre)
 ```
 
-
 ```{r}
 #| label: load-or-build-propensity-models
 #| include: false
@@ -142,7 +139,7 @@ datpre <- get_O2_Z(datpre)
 # Loop over list -----
 for (s in surglist) {
   if(file.exists(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))){
-    # Comment above ^^^ and Uncomment below vvv to re-run all propensity models
+    # Comment above and Uncomment below to re-run all propensity models
     # if(FALSE){
     load(glue("OUTPUT/Propensity_Models/prop_{s}.RDATA"))
     assign(glue("mod_{s}"), slist[[1]])
@@ -171,7 +168,6 @@ for (s in surglist) {
 }
 ```
 
-
 ```{r}
 #| label: compute-all-propensities
 #| cache: false
@@ -195,7 +191,6 @@ if(!("p_Femoral_Derotation_Osteotomy" %in% names(dat))){
   saveRDS(dat, glue("DATA/preprocessed_data_current.RDS"))
 }
 ```
-
 
 ```{r}
 #| label: read-patient-data
@@ -400,6 +395,17 @@ p
 :::
 
 ## Video
+
+<!-- Remove old videos -->
+```{r}
+#| include: false
+mp4_files <- list.files(
+  path = ".",          
+  pattern = "\\.mp4$", 
+  full.names = TRUE
+)
+deletion_result <- file.remove(mp4_files)
+```
 
 ```{r}
 #| label: get-video
@@ -665,11 +671,11 @@ for (s in surglist) {
   # Get propensity for setting title color -----
   pvalL <- 
     propL |> 
-    filter(Surgery == str_replace_all(s, "_", " ")) |> 
+    filter(Surgery == vlabs[s]) |> 
     pull(q50)/100
   pvalR <- 
     propR |> 
-    filter(Surgery == str_replace_all(s, "_", " ")) |> 
+    filter(Surgery == vlabs[s]) |> 
     pull(q50)/100
   
   poutL <- list()

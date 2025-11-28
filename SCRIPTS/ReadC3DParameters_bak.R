@@ -30,93 +30,52 @@
 # Return Parameter Data (unlisted) given group and parameter name to search
 # Removes trailing white space in character vectors
 # Returns NA if not found
-# GetParameterData <- function(P, GName, PName, Warn = TRUE) {
-#   # Test data ...
-#   # P <- Parameters
-#   # GName <- 'POINT'
-#   # PName <- 'LONG_FRAMES'
-#   # PName <- 'FRAMES'
-#   # browser()
-#   
-#   P <- P %>% dplyr::filter(GroupName == GName)
-#   PR <- which(P$ParameterName == PName)
-#   if (is_empty(PR)) {
-#     if (Warn){
-#       warning('ReadC3DParamters:GetParameterData: Parameter ', GName, ':', PName,' not found \n')
-#     }
-#     pdata <- NA
-#   } else {
-#   
-#     dims <- unlist(P$Dimensions[PR])
-#     pdata <- unlist(P$Data[PR])
-#     # If a matrix or 3D of numbers reformat
-#     
-#     # if string
-#     if (P$DataType[PR] == -1) {
-#       if (P$NumDimensions[PR] > 1) {
-#         # Reformat strings using white space
-#         # Has to be a better way ...
-#         t <- as.character(dims[2])
-#         for (i in 1: dims[2]){
-#           t[i] <- trimws(substr(pdata, (i-1)*dims[1] + 1, i*dims[1]))
-#         }
-#         pdata <- t
-#         #pdata <- trimws(str_split_fixed(pdata, ' +', n=dims[2]), 'right')
-#       } else {
-#         pdata <- trimws(pdata, 'right')
-#       }
-#     # Special conditions
-#     # This was a brilliant idea but it screws up FP:Zero
-#     #} else if (P$DataType[PR] == 2 & P$NumDimensions[PR] == 1 & dims[1] == 1) {
-#     #  # If there is a 1D integer (not a scalar) then convert two integer bytes to int()
-#     #  pdata <- as.integer((pdata[2] * 256) + pdata[1])
-#     # if numeric  
-#     } else {
-#       if (P$NumDimensions[PR] > 1) {
-#         # Re-dimension data
-#         pdata <- array(pdata, dim = dims)
-#         }
-#     }
-#   }
-#   return(pdata)
-# }
 GetParameterData <- function(P, GName, PName, Warn = TRUE) {
-  # Filter for group
+  # Test data ...
+  # P <- Parameters
+  # GName <- 'POINT'
+  # PName <- 'LONG_FRAMES'
+  # PName <- 'FRAMES'
+  # browser()
+  
   P <- P %>% dplyr::filter(GroupName == GName)
   PR <- which(P$ParameterName == PName)
-  
   if (is_empty(PR)) {
     if (Warn){
       warning('ReadC3DParamters:GetParameterData: Parameter ', GName, ':', PName,' not found \n')
     }
     pdata <- NA
   } else {
+  
     dims <- unlist(P$Dimensions[PR])
     pdata <- unlist(P$Data[PR])
+    # If a matrix or 3D of numbers reformat
     
     # if string
     if (P$DataType[PR] == -1) {
-      dims <- as.numeric(dims)
       if (P$NumDimensions[PR] > 1) {
-        # Reformat fixed-length strings
-        nstr <- prod(dims[-1])   # total number of strings
-        strlen <- dims[1]        # characters per string
-        t <- character(nstr)
-        for (i in seq_len(nstr)) {
-          start <- (i-1) * strlen + 1
-          end   <- i * strlen
-          t[i] <- trimws(substr(pdata, start, end))
+        # Reformat strings using white space
+        # Has to be a better way ...
+        t <- as.character(dims[2])
+        for (i in 1: dims[2]){
+          t[i] <- trimws(substr(pdata, (i-1)*dims[1] + 1, i*dims[1]))
         }
         pdata <- t
+        #pdata <- trimws(str_split_fixed(pdata, ' +', n=dims[2]), 'right')
       } else {
         pdata <- trimws(pdata, 'right')
       }
-      
-      # numeric
+    # Special conditions
+    # This was a brilliant idea but it screws up FP:Zero
+    #} else if (P$DataType[PR] == 2 & P$NumDimensions[PR] == 1 & dims[1] == 1) {
+    #  # If there is a 1D integer (not a scalar) then convert two integer bytes to int()
+    #  pdata <- as.integer((pdata[2] * 256) + pdata[1])
+    # if numeric  
     } else {
       if (P$NumDimensions[PR] > 1) {
-        pdata <- array(pdata, dim = as.numeric(dims))
-      }
+        # Re-dimension data
+        pdata <- array(pdata, dim = dims)
+        }
     }
   }
   return(pdata)
@@ -371,8 +330,9 @@ ReadC3DParameters <- function(con) {
         Parameters$Dimensions[PR] <- 0
         NumVal <- 1
         DataLength <- abs(Parameters$DataType[PR])
+      }
       # If vector
-     } else if (numdim == 1) {
+      else if (numdim == 1) {
         Parameters$Dimensions[PR] <- 1
         NumVal <- as.integer(pb[byte])
         DataLength <-  NumVal * abs(Parameters$DataType[PR])
@@ -396,21 +356,13 @@ ReadC3DParameters <- function(con) {
       if (Parameters$DataType[PR] == -1) {
         #browser()
         # New approach, store strings exactly as in C3D, deal with white space and dimensions as needed
-        # Parameters$Data[PR] <- list(rawToChar(pb[byte:EndByte]))
-        Parameters$Data[PR] <- list(str_conv(rawToChar(pb[byte:EndByte]), encoding = 'UTF-8'))
-        # If bytes
+        Parameters$Data[PR] <- list(rawToChar(pb[byte:EndByte]))
+      # If bytes
       } else if (Parameters$DataType[PR] == 1) {
         Parameters$Data[PR] <- list(readBin(pb[byte:EndByte], what = raw(), n = DataLength))
       # If integers 
       } else if (Parameters$DataType[PR] == 2) {
-        #browser()
-        #cat('GroupName = ', GroupName[GN], '\t ParameterName = ', ParamName, '\n')
         Parameters$Data[PR] <- list(readBin(pb[byte:EndByte], what = integer(), n = DataLength, size = 2))
-        # ANALOG OFFSETS are unsigned integers
-        # This is now handled in ReadC3D Analog conversion lines 689 - 704
-        #if(GroupName[GN] == 'ANALOG' & ParamName == 'OFFSET') {
-        #  Parameters$Data[PR] <- list(readBin(pb[byte:EndByte], what = integer(), n = DataLength, size = 2, signed = FALSE))
-        #} 
       # If float/real
       } else if (Parameters$DataType[PR] == 4) {
         if (Processor_Type == 'DEC') {

@@ -18,8 +18,10 @@ pred_outcome_by_bart <- function(xx, surglist, s, bartlist, vlabs) {
     if (!is.null(mod)) {
       set.seed(42)
       # Get posteriors and quantiles for control (0) and treated (1) -----
-      post0 <- calc_prediction_intervals(mod, new_data = xx0[names(mod$X)], pi_conf = .90)$all_prediction_samples
-      post1 <- calc_prediction_intervals(mod, new_data = xx1[names(mod$X)], pi_conf = .90)$all_prediction_samples
+      post0 <- calc_prediction_intervals(mod, new_data = xx0[names(mod$X)], 
+                                         pi_conf = .90)$all_prediction_samples
+      post1 <- calc_prediction_intervals(mod, new_data = xx1[names(mod$X)], 
+                                         pi_conf = .90)$all_prediction_samples
       posttau <- post1 - post0
       
       p <- c(.05, .25, .50, .75, .95)

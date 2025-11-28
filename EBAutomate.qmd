@@ -1,0 +1,121 @@
+---
+title: "EBAutomate"
+format: html
+---
+
+# Load required libraries
+```{r}
+library(quarto)
+library(dplyr)
+library(glue)
+library(readr)
+library(purrr)
+library(cli) # Ensure cli is loaded for the inform/alert functions
+```
+
+# --- Configuration ---
+```{r}
+EBReport_script <- "EBReport.qmd"
+EBCompare_script <- "EBCompare.qmd"
+params_file <- "report_params.xlsx"
+```
+
+# --- Main Logic ---
+```{r}
+# Read the parameters from the CSV file
+report_data <- readxl::read_xlsx(params_file)
+```
+
+# --- Functions to Render One Report ---
+```{r}
+# Define a function to render a SINGLE report safely
+render_single_report <- function(script, params, outfile, MRN, report_name) {
+  
+  # Define the core rendering function, wrapped by safely() later
+  safe_render <- purrr::safely(quarto::quarto_render)
+  
+  # Call the safe version of quarto_render
+  render_result <- safe_render(
+    script,
+    execute_params = params,
+    output_file = outfile
+  )
+  
+  # Check the result for an error
+  if (!is.null(render_result$error)) {
+    cli::cli_alert_danger("Failed to render {report_name} for MRN: {MRN}. Error: {render_result$error$message}")
+  } else {
+    cli::cli_alert_success("Successfully rendered {outfile}")
+  }
+}
+
+```
+
+# --- Function to Render All Reports Safely ---
+```{r}
+
+# Define the main function to render all reports for a single row
+render_all_reports <- function(MRN, Event_Date, deid, usevideo, figsave, usegait, custom_outcome, compare) {
+  
+  MRN <- as.character(MRN)
+  Event_Date <- as.character(Event_Date)
+  
+  # --- EBReport Template Parameters ---
+  EBReport_params <- list(
+    MRN = MRN,
+    Event_Date = Event_Date, 
+    deid = as.logical(deid),
+    usevideo = as.logical(usevideo),
+    figsave = as.logical(figsave),
+    usegait = as.logical(usegait),
+    custom_outcome = as.logical(custom_outcome)
+  )
+  
+  # --- EBCompare Template Parameters (always the same, so defined once) ---
+  EBCompare_params <- list(
+    MRN = MRN,
+    Event_Date = Event_Date,
+    fit_prop = FALSE,
+    fit_out = FALSE
+  )
+  
+  # --- Render EBReport ---
+  EBReport_outfile <- glue("EBReport_{MRN}_{Event_Date}.html")
+  cli::cli_inform("Rendering EB GAIT Report for MRN: {MRN} (Date: {Event_Date}) into {EBReport_outfile}...")
+  
+  render_single_report(
+    script = EBReport_script,
+    params = EBReport_params,
+    outfile = EBReport_outfile,
+    MRN = MRN,
+    report_name = "EB GAIT Report"
+  )
+  
+  # --- Render EBCompare (CONDITIONAL) ---
+  if (as.logical(compare)) {
+    EBCompare_outfile <- glue("EBCompare_{MRN}_{Event_Date}.html")
+    cli::cli_inform("Rendering EB Compare Report for MRN: {MRN} into {EBCompare_outfile}...")
+    
+    render_single_report(
+      script = EBCompare_script,
+      params = EBCompare_params,
+      outfile = EBCompare_outfile,
+      MRN = MRN,
+      report_name = "EB Compare Report"
+    )
+  } else {
+    cli::cli_inform("Skipping EB Compare Report for MRN: {MRN} (compare = FALSE).")
+  }
+}
+```
+
+
+```{r}
+# Iterate over the rows and render reports
+report_data %>% 
+  pwalk(render_all_reports)
+
+cli::cli_inform("Batch report generation complete. ✅")
+```
+
+
