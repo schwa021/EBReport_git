@@ -51,7 +51,7 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
     )
   
   # If GDI, take care of (Left)/(Right) versions -----
-  if (any(pdat$name == "Gait Deviation Index (Left)")) {
+  if ("Gait Deviation Index (Left)" %in% pdat$name) {
     iL <- pdat$SIDE == "L"
     iR <- !iL
     iGDIL <- pdat$name == "Gait Deviation Index (Left)"
@@ -71,7 +71,7 @@ plot_development <- function(fd, dat, v, vv = v, cap, devdat) {
   }
   
   # If DMC, take care of (Left)/(Right) versions -----
-  if (any(pdat$name == "Dynamic Motor Control Left")) {
+  if ("Dynamic Motor Control Left" %in% pdat$name) {
     iL <- pdat$SIDE == "L"
     iR <- !iL
     iDMCL <- pdat$name == "Dynamic Motor Control Left"

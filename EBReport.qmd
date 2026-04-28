@@ -3,6 +3,7 @@ title: "EB GAIT"
 subtitle: "Evidence Based Gait Analysis Interpretation Technique"
 Author: ""
 Date: ""
+
 format:
   html:
     dev: ragg_png
@@ -10,17 +11,18 @@ format:
     toc-depth: 3
     toc-location: left
     toc-title: "Section"
-    output-file: "EBReport_MRN_YYYY-MM-DD.html"
+    # output-file: "EBReport_MRN_YYYY-MM-DD.html"
     fig-dpi: 300
     embed-resources: true
     theme:
       - cosmo
     grid:
-      
       body-width: 1050px
       sidebar-width: 250px
       margin-width: 0px
+      
 lightbox: true
+
 knitr:
   opts_chunk:
     warning: false
@@ -28,6 +30,7 @@ knitr:
     cache.lazy: true
     screenshot.force: true
     fig.path: FIGURES/
+    
 html-table-processing: none
     
 execute:
@@ -37,16 +40,16 @@ execute:
   error: false
     
 params:
-  
-  MRN: 511760
-  Event_Date: "2025-10-27"
+  MRN: 666493
+  Event_Date: "2026-04-23"
   deid: FALSE
-  usevideo: FALSE
+  usevideo: TRUE
   usegait: TRUE
   figsave: FALSE
   custom_outcome: FALSE
   username: "mschwartz@gillettechildrens.com"
   password: "Duffy001!))))))))"
+  
 editor_options: 
   chunk_output_type: console
 ---
@@ -109,15 +112,15 @@ devdat <- dd  %>%
 # Get clinical data from RRFMP output -----
 # Note that pre-processed data contains propensity scores...
 if(file.exists("DATA/preprocessed_data_current.RDS")){
-  # dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
-  dat0 <- readRDS("DATA/FDpp_2025-05-09.RDS")
+  # dat0 <- readRDS("DATA/FDpp_2025-05-09.RDS")
+  dat0 <- readRDS("DATA/FDpp_2026-04-06.RDS")
   dat <- readRDS("DATA/preprocessed_data_current.RDS")
   dat <- get_meanscores(dat, "Pre")
   dat <- get_meanscores(dat, "Post")
   dat <- get_O2_Z(dat)
 } else {
-  # dat0 <- readRDS("DATA/FDpp_2024-05-25.RDS")
-  dat0 <- readRDS("DATA/FDpp_2025-05-09.RDS")
+  # dat0 <- readRDS("DATA/FDpp_2025-05-09.RDS")
+  dat0 <- readRDS("DATA/FDpp_2026-04-06.RDS")
   dat <- read_and_organize(dat0)
   dat <- get_meanscores(dat, "Pre")
   dat <- get_meanscores(dat, "Post")
@@ -125,8 +128,8 @@ if(file.exists("DATA/preprocessed_data_current.RDS")){
 }
 
 # Get all pre- data (used in GOAL table, etc...) -----
-# datpre <- readRDS("DATA/FD_2024-05-25.RDS")
-datpre <- readRDS("DATA/FD_2025-05-09.RDS")
+# datpre <- readRDS("DATA/FD_2025-05-09.RDS")
+datpre <- readRDS("DATA/FD_2026-04-06.RDS")
 datpre <- read_and_organize(datpre)
 datpre <- get_meanscores(datpre, "Pre")
 datpre <- get_O2_Z(datpre)
@@ -218,6 +221,10 @@ if(is.null(datc3d) & !is.null(datc3d_afo)){
 
 fd <- make_FD_one(datc3d, params$MRN)
 
+# Get dimensionless energy data
+fd$FD <- get_O2_Z(fd$FD)
+if(!is.null(fd$FDpp)){fd$FDpp <- get_O2_Z(fd$FDpp)}
+
 # Restrict to Current date and before (useful for processing old studies) -----
 fd$FD <- 
   fd$FD %>% 
@@ -230,7 +237,7 @@ if(!is.null(fd$FDpp)){
 }
 
 # Add NA for missing variables - this is for limbs without gait data -----
-if(params$usegait == FALSE){
+if(!params$usegait){
   vall <- names(datpre)
   vFD <- names(fd$FD)
   vadd <- vall[!(vall %in% vFD)]
@@ -644,8 +651,10 @@ out_all <- remove_missing_outcome(out_all)
 ```{r}
 #| label: save-patient-data
 
-datsave <- list(xpt = xpt, propL = propL, propR = propR, proptbl = proptbl, 
-                shap_all = shap_all, shap_tables = shap_tables, out_all = out_all)
+# Note: needed for EBCompare
+datsave <- list(xpt = xpt, propL = propL, propR = propR, proptbl = proptbl,
+                shap_all = shap_all, shap_tables = shap_tables, out_all = out_all,
+                fd = fd)
 saveRDS(datsave, glue("EBData_{params$MRN}_{params$Event_Date}.RDS"))
 ```
 
@@ -993,8 +1002,85 @@ p <- plot_development(fd, dat, v, v, cap, devdat)
 p
 ```
 
+#### Energy Consumption
+
+```{r}
+#| label: display-o2
+#| fig-height: 4.5
+
+v <- c("O2_NDspeed", "NETND_OXYCONS_Z")
+cap = ""
+p <- plot_development(fd, dat, v, v, cap, devdat)
+p
+```
+
+#### Plantar Pressure
+
+```{r}
+#| include: false
+source("SCRIPTS/get_pp.R")
+
+rootpath <- "L:/Motion Analysis Lab/Electronic Report"
+printable <- list.files(
+  path = glue("{rootpath}/{params$MRN}"), 
+  pattern = "printable*\\.pdf$", 
+  recursive = TRUE, 
+  full.names = TRUE, 
+  ignore.case = TRUE
+)
+
+###############################
+# TEST CODE 
+###############################
+# Initialize output path
+output_path <- "OUTPUT/pp_plot.png"
+
+# Only proceed if PDF files were actually found
+if (length(printable) > 0) {
+  # Date parsing
+  date_strings <- regmatches(printable, regexpr("[A-Za-z]{3}[0-9]{4}", printable))
+  
+  # Ensure date_strings matches printable length before ordering
+  if (length(date_strings) == length(printable)) {
+    date_strings <- as.Date(paste0("01", date_strings), format = "%d%b%Y")
+    printable <- printable[order(date_strings)]
+  }
+
+  pp_imgs <- map(printable, get_pp)
+  pp_imgs <- pp_imgs[!sapply(pp_imgs, is.null)]
+
+  # CHECK: Only attempt to stitch images if the list is not empty
+  if (length(pp_imgs) > 0) {
+    cols <- 2
+    rows <- split(pp_imgs, ceiling(seq_along(pp_imgs) / cols))
+
+    row_strips <- lapply(rows, function(r) {
+      # Ensure we have image objects before calling append
+      magick::image_append(do.call(c, r), stack = FALSE)
+    })
+
+    final_grid <- magick::image_append(do.call(c, row_strips), stack = TRUE)
+    
+    # Save the successful plot
+    magick::image_write(final_grid, output_path)
+  } else {
+    # If no images found in PDFs, create a blank placeholder or delete old file
+    if (file.exists(output_path)) file.remove(output_path)
+  }
+}
+
+```
+
+```{r}
+#| label: plantar-pressure
+#| out-width: "6.5in"
+#| crop: TRUE
+#| eval: !expr file.exists("OUTPUT/pp_plot.png")
+knitr::include_graphics("OUTPUT/pp_plot.png")
+```
 :::
 :::
+
 
 ```{r}
 #| label: build-afo-kinematic-plots
@@ -1047,3 +1133,17 @@ for (kk in 1:length(temp)) {
 }
 ```
 :::
+
+<!-- Remove newly created videos -->
+```{r}
+#| label: clean-up-videos
+#| include: false
+# mp4_files <- list.files(
+#   path = ".",          
+#   pattern = "\\.mp4$", 
+#   full.names = TRUE
+# )
+# deletion_result <- file.remove(mp4_files)
+```
+
+

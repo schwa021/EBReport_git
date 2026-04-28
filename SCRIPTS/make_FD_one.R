@@ -21,7 +21,6 @@ make_FD_one <- function(datc3d, mrn_in){
   
   # EOS Data -----
   source("SCRIPTS/add_EOS.R")
-  # con2 <- odbcConnect("Azure_Connection", uid = "mschwartz@gillettechildrens.com", pwd = "Duffy001!))))))))")
   con2 <- odbcConnect("Azure_Connection", uid = params$username, pwd = params$password)
   # Check for working con2 - this avoids crashing if EOS database is down
   if(con2 != -1)  FD <- add_EOS(FD, con2)
@@ -160,6 +159,12 @@ make_FD_one <- function(datc3d, mrn_in){
     FD$GMFCS_computed <- FD$GMFCS
   }
   
+  # Remove GMFCS for non-CP ---
+  if(all(FD$dx != "Cerebral palsy")){
+    FD$GMFCS <- "Missing"
+    FD$GMFCS_meas <- "Missing"
+    FD$GMFCS_computed <- "Missing"
+  }
   
   ########################################
   ##      LOOK FOR CANCELLED APPT       ##

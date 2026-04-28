@@ -1,0 +1,297 @@
+---
+title: "EBAutomate"
+format: html
+editor_options: 
+  chunk_output_type: console
+---
+
+# Load required libraries
+```{r}
+#| label: load-libraries
+
+library(tidyverse)
+library(quarto)
+library(dplyr)
+library(glue)
+library(readr)
+library(purrr)
+library(cli)
+```
+
+# --- Set working directore ---
+```{r}
+setwd("C:/Users/mschwartz/OneDrive - Gillette Children's Specialty Healthcare/EBVerse/EBReport_git")
+```
+
+# --- Function to Render One Report ---
+```{r}
+#| label: func-one-report
+
+render_single_report <- function(script, params, outdir, outfile, MRN, report_name) {
+  
+  safe_render <- purrr::safely(quarto::quarto_render)
+  
+  # Render to the current directory first
+  render_result <- safe_render(
+    input = script,
+    execute_params = params,
+    output_file = outfile 
+  )
+  
+  if (!is.null(render_result$error)) {
+    cli::cli_alert_danger("Failed to render report for MRN: {MRN}. Error: {render_result$error$message}")
+  } else {
+    # Ensure the MD directory exists
+    if (!dir.exists(outdir)) dir.create(outdir, recursive = TRUE)
+    
+    # Move the file from current directory to the MD folder
+    current_path <- outfile
+    final_path <- file.path(outdir, outfile)
+    
+    file.rename(current_path, final_path)
+    
+    cli::cli_alert_success("Successfully rendered and moved {outfile} to {outdir}")
+  }
+}
+```
+
+# --- Function to Render All Reports ---
+```{r}
+#| label: func-all-reports
+
+render_all_reports <- function(MRN, Event_Date, Review_Date, deid, usevideo, figsave, usegait, 
+                               custom_outcome, compare, MD) {
+  
+  # Remove existing trigger files (*.txt)
+  old_triggers <- list.files(path = "C:/Users/mschwartz/OneDrive - Gillette Children's Specialty Healthcare/EBVerse/EBReport_git/Report_Triggers/", 
+                             pattern = "^run_.*\\.txt$", 
+                             full.names = TRUE,
+                             recursive = TRUE)
+  file.remove(old_triggers)
+  
+  MRN <- as.character(MRN)
+  Event_Date <- as.character(Event_Date)
+  
+  # Define the directory and files separately
+  output_directory <- glue("REPORTS/{MD}")
+  
+  # --- EB Report ---
+  EBReport_filename <- glue("EBReport_{MRN}_{Event_Date}.html")
+  EBReport_params <- list(
+    MRN = MRN,
+    Event_Date = Event_Date, 
+    deid = as.logical(deid),
+    usevideo = as.logical(usevideo),
+    figsave = as.logical(figsave),
+    usegait = as.logical(usegait),
+    custom_outcome = as.logical(custom_outcome)
+  )
+  
+  render_single_report(
+    script = EBReport_script,
+    params = EBReport_params,
+    outdir = output_directory,
+    outfile = EBReport_filename,
+    MRN = MRN
+  )
+  
+  # --- EB Compare ---
+  if (as.logical(compare)) {
+    EBCompare_filename <- glue("EBCompare_{MRN}_{Event_Date}.html")
+    EBCompare_params <- list(
+      MRN = MRN,
+      Event_Date = Event_Date,
+      fit_prop = FALSE,
+      fit_out = FALSE
+    )
+    
+    render_single_report(
+      script = EBCompare_script,
+      params = EBCompare_params,
+      outdir = output_directory,
+      outfile = EBCompare_filename,
+      MRN = MRN,
+      report_name = "EB Compare Report"
+    )
+  }
+  
+  # 1. Define the relative path from the root of your OneDrive
+  report_path <- glue("EBVerse/EBReport_git/REPORTS/{MD}/{EBReport_filename}")
+  
+  # 2. Create the payload
+  trigger_payload <- list(
+    email = "mschwartz@gillettechildrens.com", 
+    # target_path = "EBVerse/EBReport_git/REPORTS/Andrew_Georgiadis/EBReport_466088_2026-02-25.html",
+    target_path = report_path,
+    patient_mrn = as.character(MRN),
+    review_date = as.character(Review_Date)
+  )
+  
+  # 3. Write as JSON
+  id <- format(Sys.time(), "%H%M%S")
+  trigger_file <- glue("C:/Users/mschwartz/OneDrive - Gillette Children's Specialty Healthcare/EBVerse/EBReport_git/Report_Triggers/{MD}/run_{id}.json")
+  
+  jsonlite::write_json(trigger_payload, trigger_file, auto_unbox = TRUE)
+
+  Sys.sleep(30)  
+  
+}
+```
+
+# --- Configuration ---
+```{r}
+#| label: define-EB-scripts
+
+EBReport_script <- "EBReport.qmd"
+EBCompare_script <- "EBCompare.qmd"
+```
+
+# --- Generate params_file From Interpretation Schedule ---
+```{r}
+#| label: run-powerautomate
+
+# Remove existing trigger files (*.txt)
+old_triggers <- list.files(path = "C:/Users/mschwartz/OneDrive - Gillette Children's Specialty Healthcare/EBVerse/EBReport_git/Schedule_Triggers/", 
+                           pattern = "^run_.*\\.txt$", 
+                           full.names = TRUE)
+file.remove(old_triggers)
+
+#  Define the path to  OneDrive trigger folder
+id <- format(Sys.time(), "%H%M%S")
+trigger_file <- glue("C:/Users/mschwartz/OneDrive - Gillette Children's Specialty Healthcare/EBVerse/EBReport_git/Schedule_Triggers/run_{id}.txt")
+writeLines(as.character(Sys.time()), trigger_file)
+
+# Wait for Power Automate and OneDrive Sync
+Sys.sleep(60)
+```
+
+# Find cass ready fo report generation
+```{r}
+#| label: find-cases
+
+# Read the interpretation schedule
+df <- read_csv("Interpretation_Schedule.csv")
+
+# Initial filtering by date
+df_future <- df %>%
+  mutate(Date_of_Interp = as.Date(Date_of_Interp),
+         Event_Date = as.Date(Event_Date)) %>%
+  filter(Date_of_Interp >= Sys.Date())
+# filter(Date_of_Interp >= "2026-03-01")    # For testing
+
+# Define the destination folder for existing reports
+report_dir <- "C:/Users/mschwartz/OneDrive - Gillette Children's Specialty Healthcare/EBVerse/EBReport_git/REPORTS"
+
+# Check for existing files
+df_to_generate <- df_future %>%
+  mutate(
+    date_suffix = format(Event_Date, "%b%Y"),
+    
+    # Check if printable exists 
+    source_path = paste0(
+      "L:/Motion Analysis Lab/Electronic Report/",
+      MRN, "/", MRN, date_suffix, "printable.pdf"
+    ),
+    # Check if non-printable exists 
+    source_pathx = paste0(
+      "L:/Motion Analysis Lab/Electronic Report/",
+      MRN, "/", MRN, date_suffix, "printable.pdf"
+    ),
+    data_is_ready = file.exists(source_path),
+    data_is_readyx = file.exists(source_pathx),
+    
+    # Time since visit
+    delta_t = as.numeric(difftime(now(), Event_Date, units = "hours")),
+    
+    # Check if Report ALREADY exists (Recursive - Search all Subdirectories)
+    report_filename = paste0("EBReport_", MRN, "_", format(Event_Date, "%Y-%m-%d"), ".html"),
+    already_generated = map_lgl(report_filename, ~ {
+      found_files <- list.files(
+        path = report_dir, 
+        pattern = paste0("^", .x, "$"), # Matches exact filename
+        recursive = TRUE,               # This stays TRUE for reports
+        full.names = TRUE
+      )
+      length(found_files) > 0
+    })
+  ) %>%
+  
+  # Filter Andy and Emily (for now)
+  filter(MD_name %in% c("Andrew Georgiadis", "Emily Andrisevic")) %>%
+  
+  # Keep rows to generate ---
+  filter((data_is_ready & !already_generated) | (delta_t > 36 & !already_generated)) %>%
+  select(MRN, Date_of_Interp, MD_email, MD_name, Event_Date, FIN)
+
+# Prepare the parameters for report generation --- 
+df_to_export <- df_to_generate %>%
+  transmute(
+    MRN = as.character(MRN),
+    Event_Date = as.Date(Event_Date),
+    Review_Date = as.Date(Date_of_Interp),
+    MD = stringr::str_replace(MD_name, " ", "_"),
+    email = MD_email,
+    deid = FALSE,
+    usevideo = TRUE,
+    compare = TRUE,
+    figsave = FALSE,
+    usegait = TRUE,
+    custom_outcome = FALSE
+  )
+
+# Write to Excel
+write_csv(df_to_export, file = "report_params.csv")
+
+```
+
+# --- Read input parameters for EB Reports ---
+```{r}
+#| label: set-or-read-report-data
+
+# Read the parameters from the CSV file - useful for testing - not needed for automation
+# report_data <- read_csv("report_params.csv")
+
+report_data <- df_to_export
+```
+
+# --- For Testing ---
+```{r}
+#| label: testing-code
+
+# MRN <- report_data$MRN[1]
+# Event_Date <- report_data$Event_Date[1]
+# Review_Date <- report_data$Review_Date[1]
+# deid <- FALSE
+# usevideo <- TRUE
+# compare <- FALSE
+# figsave <- FALSE
+# usegait <- TRUE
+# custom_outcome <- FALSE
+# compare <- FALSE
+# MD <- report_data$MD[1]
+
+```
+
+# --- Define quarto executable location ---
+```{r}
+#| label: define-quarto-paths
+
+quarto_bin_dir <- "C:/Program Files/RStudio/resources/app/bin/quarto/bin"
+Sys.setenv(QUARTO_PATH = file.path(quarto_bin_dir, "quarto.exe"))
+Sys.setenv(PATH = paste(quarto_bin_dir, Sys.getenv("PATH"), sep = ";"))
+
+```
+
+# --- Generate EB Reports and EB Comparisons
+```{r}
+#| label: generate-reports
+
+# Iterate over the rows and render reports
+report_data %>% 
+  mutate(compare = ifelse(MD == "Andrew_Georgiadis", TRUE, FALSE)) %>% 
+  select(MRN, Event_Date, Review_Date, deid, usevideo, figsave, usegait, custom_outcome, compare, MD) %>% 
+  pwalk(render_all_reports)
+
+```
+
+

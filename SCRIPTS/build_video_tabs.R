@@ -6,7 +6,7 @@
 # This file is then included in the R Markdown document to display the tabbed interface
 
 build_video_tabs <- function(vidlist, vidfile){
-
+  
   # Define the number of videos and their names -----
   N <- length(vidlist)
   
@@ -54,7 +54,19 @@ html_content <- paste0(html_content, "</ul>
 
 # Function to parse .mkr file using regular expressions
 parse_mkr <- function(file) {
-  content <- readLines(file)
+  # New code (2/5/2026) to handle missing mkr file
+  if (file.exists(file)) {
+    content <- readLines(file)
+    content <- paste(content, collapse = "\n")
+  } else {
+    # 2. If not, create variable content with your default string
+    content <- 
+      '<PATIENT FNAME="" LNAME="" NUMBER="" DATE="" DOCTOR="">
+      <MARKER LABEL="Full Body Walk Barefoot" START=".001" END="999"
+      <MARKER LABEL="Play All" START=".001" END="999"'
+  }
+  
+  # content <- readLines(file)
   content <- paste(content, collapse = "\n")
   
   # Regular expression to extract chapter data

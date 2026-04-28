@@ -67,7 +67,7 @@ outcome_plots_BART <-
       ) +
       geom_point(
         aes(x=pct50, color=surg, fill=surg),
-        size = 1.1
+        size = 1.35
       ) +
       geom_text(
         label = neglab,

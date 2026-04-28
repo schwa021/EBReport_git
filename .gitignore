@@ -38,3 +38,5 @@ appdata*
 
 
 /.quarto/
+
+**/*.quarto_ipynb
